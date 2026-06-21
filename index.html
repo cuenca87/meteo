@@ -67,17 +67,21 @@ header h1 small{font-weight:400;color:rgba(255,255,255,.7);font-size:11px;displa
 .m .v{font-size:18px;font-weight:700}
 .m .l{font-size:10px;color:var(--text2);margin-top:3px}
 
-.fcs{display:flex;gap:10px;overflow-x:auto;padding-bottom:6px;scroll-snap-type:x mandatory}
-.fcs::-webkit-scrollbar{height:0}
-.fd{min-width:100px;flex-shrink:0;background:var(--bg3);border:2px solid transparent;border-radius:12px;padding:12px 8px;text-align:center;cursor:pointer;scroll-snap-align:start;transition:border-color .15s}
-.fd:hover,.fd.on{border-color:var(--accent)}
-.fd-n{font-size:12px;font-weight:600;color:var(--accent);margin-bottom:6px}
-.fd-i{font-size:28px;line-height:1.2}
-.fd-t{font-size:15px;margin:6px 0}.fd-t .hi{font-weight:700}.fd-t .lo{color:var(--text2)}
-.fd-d{font-size:10px;color:var(--text2);line-height:1.5}
-.fd-p{font-size:10px;color:var(--text2);margin-top:4px;line-height:1.3}
+.src-sel{display:flex;gap:6px;margin-bottom:12px}
+.src-btn{flex:1;padding:7px 4px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text2);font-size:11px;cursor:pointer;text-align:center;font-weight:500}
+.src-btn.on{background:var(--accent);color:#fff;border-color:var(--accent)}
 
-.hp{display:none;margin-top:10px}
+.fd{display:flex;align-items:center;gap:12px;background:var(--bg3);border:2px solid transparent;border-radius:12px;padding:10px 14px;margin-bottom:8px;cursor:pointer;transition:border-color .15s}
+.fd:hover,.fd.on{border-color:var(--accent)}
+.fd-i{font-size:28px;flex-shrink:0;width:40px;text-align:center}
+.fd-body{flex:1;min-width:0}
+.fd-n{font-size:13px;font-weight:600;color:var(--accent)}
+.fd-p{font-size:11px;color:var(--text2);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fd-right{text-align:right;flex-shrink:0}
+.fd-t{font-size:16px;white-space:nowrap}.fd-t .hi{font-weight:700}.fd-t .lo{color:var(--text2)}
+.fd-d{font-size:10px;color:var(--text2);margin-top:2px}
+
+.hp{display:none;margin-top:8px;margin-bottom:4px}
 .hs{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;scroll-snap-type:x mandatory}
 .hs::-webkit-scrollbar{height:0}
 .hi2{min-width:58px;flex-shrink:0;text-align:center;padding:8px 4px;background:var(--bg3);border-radius:8px;scroll-snap-align:start}
@@ -169,11 +173,57 @@ function cl(t,h){if(t==null||h==null)return{t:"-",c:"var(--text2)"};if(t<5)retur
 function ul(u){if(u==null)return{t:"-",c:"var(--text2)"};if(u<=2)return{t:"Bajo",c:"#22c55e"};if(u<=5)return{t:"Moderado",c:"#eab308"};if(u<=7)return{t:"Alto",c:"#f97316"};if(u<=10)return{t:"Muy alto",c:"#ef4444"};return{t:"Extremo",c:"#a855f7"}}
 function wi(c){if(c==null)return"";const i={0:"🌀",1:"⛈",2:"⛈",3:"⛈",4:"⛈",5:"🌨",6:"🌧",7:"🌨",8:"🌧",9:"🌧",10:"🌧",11:"🌧",12:"🌧",13:"🌨",14:"🌨",15:"🌨",16:"🌨",17:"🌧",18:"🌧",19:"🌫",20:"🌫",21:"🌫",22:"🌫",23:"🌬",24:"🌬",25:"❄",26:"☁",27:"🌥",28:"🌥",29:"⛅",30:"⛅",31:"🌙",32:"☀",33:"🌙",34:"☀",35:"🌧",36:"🌡",37:"⛈",38:"⛈",39:"🌦",40:"🌦",41:"🌨",42:"🌨",43:"🌨",44:"",45:"🌦",46:"🌨",47:"⛈"};return i[c]||"🌡"}
 
+function wmoIcon(c){const i={0:"☀",1:"🌤",2:"⛅",3:"☁",45:"🌫",48:"🌫",51:"🌦",53:"🌧",55:"🌧",56:"🌧",57:"🌧",61:"🌧",63:"🌧",65:"🌧",66:"🌧",67:"🌧",71:"🌨",73:"🌨",75:"❄",77:"❄",80:"🌦",81:"🌧",82:"🌧",85:"🌨",86:"🌨",95:"⛈",96:"⛈",99:"⛈"};return i[c]||"🌡"}
+function wmoText(c){const t={0:"Despejado",1:"Poco nuboso",2:"Parcialmente nublado",3:"Nublado",45:"Niebla",48:"Niebla",51:"Llovizna",53:"Llovizna",55:"Llovizna intensa",61:"Lluvia ligera",63:"Lluvia moderada",65:"Lluvia intensa",71:"Nevada ligera",73:"Nevada moderada",75:"Nevada intensa",80:"Chubascos",81:"Chubascos moderados",82:"Chubascos intensos",95:"Tormenta",96:"Tormenta con granizo",99:"Tormenta fuerte"};return t[c]||""}
+
+let lastLat=0,lastLon=0,lastFcSrc="wc";
+async function loadForecast(src){
+  lastFcSrc=src;const lat=lastLat,lon=lastLon;
+  document.querySelectorAll(".src-btn").forEach(b=>b.classList.toggle("on",b.dataset.src===src));
+  const tab=document.getElementById("t-prev");
+  const hdr=tab.querySelector(".src-sel")?.outerHTML||"";
+  tab.innerHTML=hdr+`<div class="no-data">Cargando prevision...</div>`;
+
+  try{
+    let days=[];HD=null;
+    if(src==="wc"){
+      const[fr,hr]=await Promise.all([fetch(`${WB}/v3/wx/forecast/daily/5day?apiKey=${AK}&geocode=${lat},${lon}&units=m&language=es-ES&format=json`),fetch(`${WB}/v3/wx/forecast/hourly/2day?apiKey=${AK}&geocode=${lat},${lon}&units=m&language=es-ES&format=json`)]);
+      if(!fr.ok)throw new Error("API error");const fc=await fr.json();if(hr.ok)HD=await hr.json();
+      const dp=fc.daypart?.[0]||{};
+      for(let i=0;i<fc.dayOfWeek.length;i++){const di=i*2,ni=i*2+1;days.push({name:i===0?"Hoy":fc.dayOfWeek[i],hi:fc.temperatureMax[i],lo:fc.temperatureMin[i],icon:wi(dp.iconCode?.[di]??dp.iconCode?.[ni]),phrase:dp.wxPhraseLong?.[di]??dp.wxPhraseLong?.[ni]??"",precip:dp.precipChance?.[di]??dp.precipChance?.[ni],wind:dp.windSpeed?.[di]??dp.windSpeed?.[ni],wdir:dp.windDirectionCardinal?.[di]??dp.windDirectionCardinal?.[ni]??""})}
+    }else if(src==="om"){
+      const r=await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,windspeed_10m_max,weathercode&hourly=temperature_2m,precipitation_probability,weathercode,windspeed_10m,winddirection_10m&timezone=auto&forecast_days=7`);
+      if(!r.ok)throw new Error("API error");const d=await r.json();
+      const dw=["Domingo","Lunes","Martes","Miercoles","Jueves","Viernes","Sabado"];
+      HD={validTimeLocal:d.hourly.time.map(t=>t+":00"),temperature:d.hourly.temperature_2m,precipChance:d.hourly.precipitation_probability,iconCode:d.hourly.weathercode.map(c=>null),windSpeed:d.hourly.windspeed_10m,windDirectionCardinal:d.hourly.winddirection_10m?.map(wl)||[]};
+      HD._wmo=d.hourly.weathercode;
+      for(let i=0;i<d.daily.time.length;i++){const dt=new Date(d.daily.time[i]+"T12:00:00");days.push({name:i===0?"Hoy":dw[dt.getDay()],hi:d.daily.temperature_2m_max[i],lo:d.daily.temperature_2m_min[i],icon:wmoIcon(d.daily.weathercode[i]),phrase:wmoText(d.daily.weathercode[i]),precip:null,wind:d.daily.windspeed_10m_max[i],wdir:"",rain:d.daily.precipitation_sum[i]})}
+    }
+
+    let html=hdr||buildSrcSel(src);
+    if(days.length){
+      const todayHi=days[0].hi,todayLo=days[0].lo;
+      html+=`<div style="text-align:center;margin-bottom:12px"><span style="color:var(--text2)">Hoy:</span> <b style="color:${tc(todayLo)}">${todayLo!=null?todayLo+"°":"--"}</b> <span style="color:var(--text2)">min</span> · <b style="color:${tc(todayHi)}">${todayHi!=null?todayHi+"°":"--"}</b> <span style="color:var(--text2)">max</span></div>`;
+      days.forEach((d,i)=>{
+        const precTxt=d.precip!=null?`💧${d.precip}%`:(d.rain!=null?`💧${d.rain.toFixed(1)}mm`:"");
+        const windTxt=d.wind!=null?`🌬 ${d.wind} ${d.wdir}`:"";
+        html+=`<div class="fd" onclick="showH(${i})"><div class="fd-i">${d.icon}</div><div class="fd-body"><div class="fd-n">${d.name}</div><div class="fd-p">${d.phrase}</div></div><div class="fd-right"><div class="fd-t"><span class="hi" style="color:${tc(d.hi)}">${d.hi!=null?d.hi+"°":"--"}</span> <span class="lo">${d.lo!=null?d.lo+"°":"--"}</span></div><div class="fd-d">${precTxt} ${windTxt}</div></div></div>`});
+      html+=`<div id="hp" class="hp"></div>`;
+    }else html+=`<div class="no-data">Prevision no disponible.</div>`;
+    tab.innerHTML=html;
+    tab.querySelectorAll(".src-btn").forEach(b=>b.addEventListener("click",()=>loadForecast(b.dataset.src)));
+    if(days.length)showH(0);
+  }catch(e){tab.innerHTML=(hdr||buildSrcSel(src))+`<div class="no-data" style="color:#ef4444">Error: ${e.message}</div>`;tab.querySelectorAll(".src-btn").forEach(b=>b.addEventListener("click",()=>loadForecast(b.dataset.src)))}
+}
+function buildSrcSel(cur){return`<div class="src-sel"><button class="src-btn ${cur==="wc"?"on":""}" data-src="wc">Weather Co.</button><button class="src-btn ${cur==="om"?"on":""}" data-src="om">Open-Meteo</button></div>`}
+
 const TB=["ahora","ayer","prev","mar","est"];
 function stab(id){document.querySelectorAll(".tabs button").forEach((b,i)=>b.classList.toggle("on",TB[i]===id));TB.forEach(t=>document.getElementById("t-"+t).classList.toggle("on",t===id));if(M){showMap(id==="est");if(id==="est"&&M._stBounds)setTimeout(()=>M.fitBounds(M._stBounds.pad(.15)),150)}}
 
 function showH(di){if(!HD)return;const d0=HD.validTimeLocal[0]?.substring(0,10),dd=new Date(d0);dd.setDate(dd.getDate()+di);const tgt=dd.toISOString().substring(0,10);
-let h=`<div class="hs">`,n=0;for(let i=0;i<HD.validTimeLocal.length;i++){const dt=HD.validTimeLocal[i];if(!dt.startsWith(tgt))continue;h+=`<div class="hi2"><div class="hh">${dt.substring(11,16)}</div><div class="hic">${wi(HD.iconCode[i])}</div><div class="ht" style="color:${tc(HD.temperature[i])}">${HD.temperature[i]}°</div><div class="he">💧${HD.precipChance[i]}% 💨${HD.windSpeed[i]}</div></div>`;n++}h+=`</div>`;
+let h=`<div class="hs">`,n=0;for(let i=0;i<HD.validTimeLocal.length;i++){const dt=HD.validTimeLocal[i];if(!dt.startsWith(tgt))continue;
+  const ic=HD._wmo?wmoIcon(HD._wmo[i]):wi(HD.iconCode[i]);const pc=HD.precipChance?.[i];
+  h+=`<div class="hi2"><div class="hh">${dt.substring(11,16)}</div><div class="hic">${ic}</div><div class="ht" style="color:${tc(HD.temperature[i])}">${HD.temperature[i]}°</div><div class="he">${pc!=null?"💧"+pc+"% ":""}💨${HD.windSpeed[i]}</div></div>`;n++}h+=`</div>`;
 const p=document.getElementById("hp");if(n){p.innerHTML=h;p.style.display="block"}else p.style.display="none";
 document.querySelectorAll(".fd").forEach((d,i)=>d.classList.toggle("on",i===di))}
 
@@ -204,7 +254,12 @@ async function go(name,lat,lon){
     prog(20);const obs=[];
     for(let i=0;i<sts.length;i++){const s=sts[i];prog(20+(i/sts.length)*35);try{const r=await fetch(`${WB}/v2/pws/observations/current?stationId=${s.id}&format=json&units=m&apiKey=${AK}&numericPrecision=decimal`);if(r.ok&&r.status!==204){const d=await r.json(),o=d.observations?.[0];if(o){obs.push({s,o});continue}}}catch{}obs.push({s,o:null})}
 
-    const vl=obs.filter(x=>x.o?.metric),V={t:[],h:[],w:[],g:[],p:[],pr:[],dp:[],d:[],uv:[],sr:[]};
+    const allVl=obs.filter(x=>x.o?.metric);
+    // Filter outliers via IQR on temp and precip
+    function iqrF(arr,fn){if(arr.length<4)return arr;const vs=arr.map(fn).filter(v=>v!=null).sort((a,b)=>a-b);if(vs.length<4)return arr;const q1=vs[Math.floor(vs.length*.25)],q3=vs[Math.floor(vs.length*.75)],iq=q3-q1,lo2=q1-1.5*iq,hi2=q3+1.5*iq;return arr.filter(x=>{const v=fn(x);return v==null||v>=lo2&&v<=hi2})}
+    let vl=iqrF(allVl,x=>x.o.metric.temp);
+    vl=iqrF(vl,x=>x.o.metric.precipTotal);
+    const V={t:[],h:[],w:[],g:[],p:[],pr:[],dp:[],d:[],uv:[],sr:[]};
     vl.forEach(({o})=>{const m=o.metric;if(m.temp!=null)V.t.push(m.temp);if(o.humidity!=null)V.h.push(o.humidity);if(m.windSpeed!=null)V.w.push(m.windSpeed);if(m.windGust!=null)V.g.push(m.windGust);if(m.pressure!=null)V.p.push(m.pressure);if(m.precipTotal!=null)V.pr.push(m.precipTotal);if(m.dewpt!=null)V.dp.push(m.dewpt);if(o.winddir!=null)V.d.push(o.winddir);if(o.uv!=null)V.uv.push(o.uv);if(o.solarRadiation!=null)V.sr.push(o.solarRadiation)});
     const av=a=>a.length?a.reduce((x,y)=>x+y,0)/a.length:null,amx=a=>a.length?Math.max(...a):null,amn=a=>a.length?Math.min(...a):null;
     const aT=av(V.t),mnT=amn(V.t),mxT=amx(V.t),aH=av(V.h),aW=av(V.w),aG=amx(V.g),aP=av(V.p),aPr=av(V.pr),aD=av(V.dp),aUV=av(V.uv),aSr=av(V.sr),aDir=V.d.length?Math.round(av(V.d)):null;
@@ -212,12 +267,15 @@ async function go(name,lat,lon){
 
     // Tides
     prog(58);let tH="";const pt=nearPort(lat,lon,20);
-    if(pt){try{const td2=new Date().toISOString().slice(0,10).replace(/-/g,"");const tr=await fetch(`${IB}?request=gettide&id=${pt.id}&format=json&date=${td2}`);if(tr.ok){const td=await tr.json(),ms=td.mareas?.datos?.marea;if(ms?.length){tH=`<div class="card"><div class="ct ct-c">Mareas — ${td.mareas.puerto}</div><div class="g4">${ms.map(m2=>{const pl=m2.tipo==="pleamar";return`<div class="m"><div class="v" style="color:${pl?"#06b6d4":"#f59e0b"}">${m2.hora}</div><div class="l">${pl?"Pleamar":"Bajamar"}<br>${parseFloat(m2.altura).toFixed(2)} m</div></div>`}).join("")}</div></div>`}}}catch{}}
+    if(pt){try{const td2=new Date().toISOString().slice(0,10).replace(/-/g,"");const tr=await fetch(`${IB}?request=gettide&id=${pt.id}&format=json&date=${td2}`);if(tr.ok){const td=await tr.json(),ms=td.mareas?.datos?.marea;if(ms?.length){
+      const utcOff=-new Date().getTimezoneOffset();
+      function fixH(h){const[hh,mm]=h.split(":").map(Number);const t=hh*60+mm+utcOff;const nh=Math.floor(((t%1440)+1440)%1440/60),nm=((t%1440)+1440)%1440%60;return String(nh).padStart(2,"0")+":"+String(nm).padStart(2,"0")}
+      tH=`<div class="card"><div class="ct ct-c">Mareas — ${td.mareas.puerto}</div><div class="g4">${ms.map(m2=>{const pl=m2.tipo==="pleamar";return`<div class="m"><div class="v" style="color:${pl?"#06b6d4":"#f59e0b"}">${fixH(m2.hora)}</div><div class="l">${pl?"Pleamar":"Bajamar"}<br>${parseFloat(m2.altura).toFixed(2)} m</div></div>`}).join("")}</div></div>`}}}catch{}}
 
-    // Forecast + hourly
+    // Forecast (for current tab description + solar/lunar)
     prog(62);let fc=null,fcB="";
-    try{const[fr,hr]=await Promise.all([fetch(`${WB}/v3/wx/forecast/daily/5day?apiKey=${AK}&geocode=${lat},${lon}&units=m&language=es-ES&format=json`),fetch(`${WB}/v3/wx/forecast/hourly/2day?apiKey=${AK}&geocode=${lat},${lon}&units=m&language=es-ES&format=json`)]);
-    if(fr.ok)fc=await fr.json();if(hr.ok)HD=await hr.json();
+    try{const fr=await fetch(`${WB}/v3/wx/forecast/daily/5day?apiKey=${AK}&geocode=${lat},${lon}&units=m&language=es-ES&format=json`);
+    if(fr.ok)fc=await fr.json();
     if(fc){const dp=fc.daypart?.[0]||{};const ic=dp.iconCode?.[0]??dp.iconCode?.[1],ph=dp.wxPhraseLong?.[0]??dp.wxPhraseLong?.[1]??"";fcB=`<div style="text-align:center;margin-bottom:20px;font-size:14px;color:var(--text2)">${wi(ic)} ${ph}</div>`}}catch{}
 
     const sr2=fc?.sunriseTimeLocal?.[0],ss2=fc?.sunsetTimeLocal?.[0],mn2=fc?.moonPhase?.[0];
@@ -245,10 +303,16 @@ async function go(name,lat,lon){
     prog(68);const yDate=new Date();yDate.setDate(yDate.getDate()-1);const yStr=yDate.toISOString().slice(0,10).replace(/-/g,"");
     const yDow=["Domingo","Lunes","Martes","Miercoles","Jueves","Viernes","Sabado"][yDate.getDay()];
     const yLabel=`${yDow} ${yDate.getDate()}/${yDate.getMonth()+1}`;
-    const YY={tMax:[],tMin:[],tAvg:[],gMax:[],precip:[],hMax:[],hMin:[],hAvg:[],wMax:[],wAvg:[],pMax:[],pMin:[],uvMax:[],srMax:[]};let yN=0;
+    const yRaw=[];
     for(let i=0;i<vl.length;i++){const st=vl[i].s;prog(68+(i/vl.length)*18);
-      try{const r=await fetch(`${WB}/v2/pws/history/daily?stationId=${st.id}&format=json&units=m&date=${yStr}&apiKey=${AK}&numericPrecision=decimal`);if(!r.ok||r.status===204)continue;const ob=(await r.json()).observations?.[0];if(!ob)continue;const mm=ob.metric;
-      YY.tMax.push(mm.tempHigh);YY.tMin.push(mm.tempLow);YY.tAvg.push(mm.tempAvg);YY.gMax.push(mm.windgustHigh);YY.wMax.push(mm.windspeedHigh);YY.wAvg.push(mm.windspeedAvg);YY.precip.push(mm.precipTotal);YY.hMax.push(ob.humidityHigh);YY.hMin.push(ob.humidityLow);YY.hAvg.push(ob.humidityAvg);YY.pMax.push(mm.pressureMax);YY.pMin.push(mm.pressureMin);if(ob.uvHigh!=null)YY.uvMax.push(ob.uvHigh);if(ob.solarRadiationHigh!=null)YY.srMax.push(ob.solarRadiationHigh);yN++}catch{}}
+      try{const r=await fetch(`${WB}/v2/pws/history/daily?stationId=${st.id}&format=json&units=m&date=${yStr}&apiKey=${AK}&numericPrecision=decimal`);if(!r.ok||r.status===204)continue;const ob=(await r.json()).observations?.[0];if(!ob)continue;yRaw.push(ob)}catch{}}
+    // Filter outliers on tempAvg and precipTotal
+    function iqrFilter(arr,fn){if(arr.length<4)return arr;const vs=arr.map(fn).filter(v=>v!=null).sort((a,b)=>a-b);if(vs.length<4)return arr;const q1=vs[Math.floor(vs.length*.25)],q3=vs[Math.floor(vs.length*.75)],iq=q3-q1,lo3=q1-1.5*iq,hi3=q3+1.5*iq;return arr.filter(x=>{const v=fn(x);return v==null||v>=lo3&&v<=hi3})}
+    let yFilt=iqrFilter(yRaw,o=>o.metric.tempAvg);
+    yFilt=iqrFilter(yFilt,o=>o.metric.precipTotal);
+    const yN=yFilt.length;
+    const YY={tMax:[],tMin:[],tAvg:[],gMax:[],precip:[],hMax:[],hMin:[],hAvg:[],wMax:[],wAvg:[],pMax:[],pMin:[],uvMax:[],srMax:[]};
+    yFilt.forEach(ob=>{const mm=ob.metric;YY.tMax.push(mm.tempHigh);YY.tMin.push(mm.tempLow);YY.tAvg.push(mm.tempAvg);YY.gMax.push(mm.windgustHigh);YY.wMax.push(mm.windspeedHigh);YY.wAvg.push(mm.windspeedAvg);YY.precip.push(mm.precipTotal);YY.hMax.push(ob.humidityHigh);YY.hMin.push(ob.humidityLow);YY.hAvg.push(ob.humidityAvg);YY.pMax.push(mm.pressureMax);YY.pMin.push(mm.pressureMin);if(ob.uvHigh!=null)YY.uvMax.push(ob.uvHigh);if(ob.solarRadiationHigh!=null)YY.srMax.push(ob.solarRadiationHigh)});
     if(yN){const a2=ar=>ar.reduce((x,y)=>x+y,0)/ar.length;
     const hT=a2(YY.tMax),lT=a2(YY.tMin),aT2=a2(YY.tAvg),hG=a2(YY.gMax),hP=a2(YY.precip),hHx=a2(YY.hMax),hHn=a2(YY.hMin),hHa=a2(YY.hAvg),hWm=a2(YY.wMax),hWa=a2(YY.wAvg),pMx=a2(YY.pMax),pMn=a2(YY.pMin);
     const yUv=YY.uvMax.length?a2(YY.uvMax):null,ySr=YY.srMax.length?a2(YY.srMax):null;
@@ -272,12 +336,8 @@ async function go(name,lat,lon){
     else document.getElementById("t-ayer").innerHTML=`<div class="no-data">Sin datos de ayer.</div>`;
 
     // TAB PREVISION
-    prog(88);if(fc){const dp=fc.daypart?.[0]||{};let fH=`<div class="card"><div class="ct ct-b">Prevision 5 dias</div><div class="fcs">`;
-    for(let i=0;i<fc.dayOfWeek.length;i++){const hi=fc.temperatureMax[i],lo3=fc.temperatureMin[i],di=i*2,ni=i*2+1;const icon=dp.iconCode?.[di]??dp.iconCode?.[ni],phrase=dp.wxPhraseLong?.[di]??dp.wxPhraseLong?.[ni]??"",precip=dp.precipChance?.[di]??dp.precipChance?.[ni],wind=dp.windSpeed?.[di]??dp.windSpeed?.[ni],wdir=dp.windDirectionCardinal?.[di]??dp.windDirectionCardinal?.[ni]??"";
-    fH+=`<div class="fd" onclick="showH(${i})"><div class="fd-n">${i===0?"Hoy":fc.dayOfWeek[i]}</div><div class="fd-i">${wi(icon)}</div><div class="fd-t"><span class="hi" style="color:${tc(hi)}">${hi!=null?hi+"°":"--"}</span> <span class="lo">${lo3!=null?lo3+"°":"--"}</span></div><div class="fd-d">${precip!=null?"💧"+precip+"% ":""}${wind!=null?"💨"+wind+" "+wdir:""}</div><div class="fd-p">${phrase}</div></div>`}
-    fH+=`</div><div id="hp" class="hp"></div></div>`;
-    document.getElementById("t-prev").innerHTML=fH;showH(0)}
-    else document.getElementById("t-prev").innerHTML=`<div class="no-data">Prevision no disponible.</div>`;
+    prog(88);lastLat=lat;lastLon=lon;
+    await loadForecast("wc");
 
     // TAB ESTACIONES
     prog(95);let sH=`<table id="ctab"><tr><th>ID</th><th>Temp</th><th>Hum</th><th>Viento</th><th>Precip</th><th>Pres</th></tr>`;
