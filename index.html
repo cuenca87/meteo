@@ -273,19 +273,17 @@ async function go(name,lat,lon){
       function fixH(h){const[hh,mm]=h.split(":").map(Number);const t=hh*60+mm+utcOff;const nh=Math.floor(((t%1440)+1440)%1440/60),nm=((t%1440)+1440)%1440%60;return String(nh).padStart(2,"0")+":"+String(nm).padStart(2,"0")}
       tH=`<div class="card"><div class="ct ct-c">Mareas — ${td.mareas.puerto}</div><div class="g4">${ms.map(m2=>{const pl=m2.tipo==="pleamar";return`<div class="m"><div class="v" style="color:${pl?"#06b6d4":"#f59e0b"}">${fixH(m2.hora)}</div><div class="l">${pl?"Pleamar":"Bajamar"}<br>${parseFloat(m2.altura).toFixed(2)} m</div></div>`}).join("")}</div></div>`}}}catch{}}
     // Marine data: try seatemperature.info first, then Open-Meteo as fallback
-    let seaTemp=null,seaTempMin=null,waveH=null,waveD=null;
+    let seaTemp=null,waveH=null,waveD=null;
     try{const slug=name.normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase().replace(/\s+/g,"-").replace(/[^a-z0-9-]/g,"");
       const stR=await fetch(`https://seatemperature.info/es/${slug}-temperatura-del-agua-del-mar.html`);
       if(stR.ok){const stHtml=await stR.text();
-        const m3=stHtml.match(/temperatura del agua[^.]*hoy es ([0-9]+\.?[0-9]*)/);if(m3)seaTemp=parseFloat(m3[1]);
-        const m4=stHtml.match(/id=s_t>([0-9]+\.?[0-9]*)/);if(m4)seaTempMin=parseFloat(m4[1])}}catch{}
+        const m3=stHtml.match(/temperatura del agua[^.]*hoy es ([0-9]+\.?[0-9]*)/);if(m3)seaTemp=parseFloat(m3[1])}}catch{}
     // Open-Meteo Marine for waves (and water temp fallback)
     try{const mr=await fetch(`https://marine-api.open-meteo.com/v1/marine?latitude=${lat}&longitude=${lon}&current=sea_surface_temperature,wave_height,wave_direction&timezone=auto&forecast_days=1`);
       if(mr.ok){const mc=(await mr.json()).current;if(mc){if(seaTemp==null)seaTemp=mc.sea_surface_temperature;waveH=mc.wave_height;waveD=mc.wave_direction}}}catch{}
     if(seaTemp!=null||waveH!=null){
-      marH=`<div class="card"><div class="ct ct-c">Estado del mar</div><div class="g4">
+      marH=`<div class="card"><div class="ct ct-c">Estado del mar</div><div class="g3">
         <div class="m"><div class="v" style="color:#06b6d4">${seaTemp!=null?seaTemp+"°":"--"}</div><div class="l">Temp. agua</div></div>
-        <div class="m"><div class="v" style="color:#06b6d4">${seaTempMin!=null?seaTempMin+"°":"--"}</div><div class="l">Temp. min</div></div>
         <div class="m"><div class="v">${waveH!=null?waveH+" m":"--"}</div><div class="l">Oleaje</div></div>
         <div class="m"><div class="v">${waveD!=null?wa(waveD)+" "+wl(waveD):"--"}</div><div class="l">Dir. oleaje</div></div>
       </div></div>`}
@@ -360,7 +358,7 @@ async function go(name,lat,lon){
     // TAB ESTACIONES
     prog(95);let sH=`<table id="ctab"><tr><th>ID</th><th>Temp</th><th>Hum</th><th>Viento</th><th>Precip</th><th>Pres</th></tr>`;
     obs.forEach(({s:st,o})=>{const m2=o?.metric;if(!m2)return;sH+=`<tr><td style="text-align:left;color:var(--accent)">${st.id}</td><td style="color:${tc(m2.temp)};font-weight:700">${m2.temp}°</td><td>${o.humidity}%</td><td>${m2.windSpeed} ${wl(o.winddir)}</td><td>${m2.precipTotal}</td><td>${m2.pressure}</td></tr>`});sH+=`</table>`;
-    obs.forEach(({s:st,o})=>{const m2=o?.metric;if(!m2)return;sH+=`<div class="sc" onclick="M.setView([${st.lat},${st.lon}],15)"><div class="sc-r"><div><div class="sc-id">${st.id}</div><div class="sc-h">${o.neighborhood||st.name} · ${st.dist.toFixed(1)} km · ${ta(o.obsTimeUtc)}</div></div><div class="sc-t" style="color:${tc(m2.temp)}">${m2.temp}°</div></div><div class="sc-d"><span>💧${o.humidity}%</span><span>💨${m2.windSpeed} ${wl(o.winddir)}</span><span>🌧️${m2.precipTotal} mm</span><span>⏱️${m2.pressure}</span>${o.uv!=null?`<span style="color:${ul(o.uv).c}">☀️UV ${o.uv}</span>`:""}</div></div>`});
+    obs.forEach(({s:st,o})=>{const m2=o?.metric;if(!m2)return;sH+=`<div class="sc" onclick="M.setView([${st.lat},${st.lon}],15)"><div class="sc-r"><div><div class="sc-id">${st.id} <a href="https://www.wunderground.com/dashboard/pws/${st.id}" target="_blank" onclick="event.stopPropagation()" style="font-size:10px;color:var(--text2);text-decoration:none">↗ ver ficha</a></div><div class="sc-h">${o.neighborhood||st.name} · ${st.dist.toFixed(1)} km · ${ta(o.obsTimeUtc)}</div></div><div class="sc-t" style="color:${tc(m2.temp)}">${m2.temp}°</div></div><div class="sc-d"><span>💧${o.humidity}%</span><span>💨${m2.windSpeed} ${wl(o.winddir)}</span><span>🌧️${m2.precipTotal} mm</span><span>⏱️${m2.pressure}</span>${o.uv!=null?`<span style="color:${ul(o.uv).c}">☀️UV ${o.uv}</span>`:""}</div></div>`});
     document.getElementById("t-est").innerHTML=sH;
 
     const bds=L.latLngBounds();obs.forEach(({s:st,o})=>{const m2=o?.metric;
