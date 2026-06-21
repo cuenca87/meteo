@@ -273,20 +273,18 @@ async function go(name,lat,lon){
       function fixH(h){const[hh,mm]=h.split(":").map(Number);const t=hh*60+mm+utcOff;const nh=Math.floor(((t%1440)+1440)%1440/60),nm=((t%1440)+1440)%1440%60;return String(nh).padStart(2,"0")+":"+String(nm).padStart(2,"0")}
       tH=`<div class="card"><div class="ct ct-c">Mareas — ${td.mareas.puerto}</div><div class="g4">${ms.map(m2=>{const pl=m2.tipo==="pleamar";return`<div class="m"><div class="v" style="color:${pl?"#06b6d4":"#f59e0b"}">${fixH(m2.hora)}</div><div class="l">${pl?"Pleamar":"Bajamar"}<br>${parseFloat(m2.altura).toFixed(2)} m</div></div>`}).join("")}</div></div>`}}}catch{}}
     // Marine data: try seatemperature.info first, then Open-Meteo as fallback
-    let seaTemp=null,seaTempMin=null,waveH=null,waveD=null;
+    let seaTemp=null,waveH=null,waveD=null;
     try{const slug=name.normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase().replace(/\s+/g,"-").replace(/[^a-z0-9-]/g,"");
       const sfx=`${slug}-temperatura-del-agua-del-mar.html`;
       for(const base of [`https://seatemperature.info/es/${sfx}`,`https://seatemperature.info/es/espana/${sfx}`]){
-        try{const stR=await fetch(base);if(!stR.ok)continue;const stHtml=await stR.text();
-          const m3=stHtml.match(/temperatura del agua[^.]*hoy es ([0-9]+\.?[0-9]*)/);if(m3){seaTemp=parseFloat(m3[1]);
-          const m4=stHtml.match(/id=s_t>([0-9]+\.?[0-9]*)/);if(m4)seaTempMin=parseFloat(m4[1]);break}}catch{}}}catch{}
+        try{const stR=await fetch(base,{cache:"no-store"});if(!stR.ok)continue;const stHtml=await stR.text();
+          const m3=stHtml.match(/temperatura del agua[^.]*hoy es ([0-9]+\.?[0-9]*)/);if(m3){seaTemp=parseFloat(m3[1]);break}}catch{}}}catch{}
     // Open-Meteo Marine for waves (and water temp fallback)
     try{const mr=await fetch(`https://marine-api.open-meteo.com/v1/marine?latitude=${lat}&longitude=${lon}&current=sea_surface_temperature,wave_height,wave_direction&timezone=auto&forecast_days=1`);
       if(mr.ok){const mc=(await mr.json()).current;if(mc){if(seaTemp==null)seaTemp=mc.sea_surface_temperature;waveH=mc.wave_height;waveD=mc.wave_direction}}}catch{}
     if(seaTemp!=null||waveH!=null){
-      marH=`<div class="card"><div class="ct ct-c">Estado del mar</div><div class="g4">
+      marH=`<div class="card"><div class="ct ct-c">Estado del mar</div><div class="g3">
         <div class="m"><div class="v" style="color:#06b6d4">${seaTemp!=null?seaTemp+"°":"--"}</div><div class="l">Temp. agua</div></div>
-        <div class="m"><div class="v" style="color:#06b6d4">${seaTempMin!=null?seaTempMin+"°":"--"}</div><div class="l">Temp. min</div></div>
         <div class="m"><div class="v">${waveH!=null?waveH+" m":"--"}</div><div class="l">Oleaje</div></div>
         <div class="m"><div class="v">${waveD!=null?wa(waveD)+" "+wl(waveD):"--"}</div><div class="l">Dir. oleaje</div></div>
       </div></div>`}
