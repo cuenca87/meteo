@@ -170,7 +170,7 @@ function ul(u){if(u==null)return{t:"-",c:"var(--text2)"};if(u<=2)return{t:"Bajo"
 function wi(c){if(c==null)return"";const i={0:"🌪️",1:"⛈️",2:"⛈️",3:"⛈️",4:"⛈️",5:"🌨️",6:"🌧️",7:"🌨️",8:"🌧️",9:"🌧️",10:"🌧️",11:"🌧️",12:"🌧️",13:"🌨️",14:"🌨️",15:"🌨️",16:"🌨️",17:"🌧️",18:"🌧️",19:"🌫️",20:"🌫️",21:"🌫️",22:"🌫️",23:"💨",24:"💨",25:"❄️",26:"☁️",27:"🌥️",28:"🌥️",29:"⛅",30:"⛅",31:"🌙",32:"☀️",33:"🌙",34:"☀️",35:"🌧️",36:"🔥",37:"⛈️",38:"⛈️",39:"🌧️",40:"🌧️",41:"🌨️",42:"🌨️",43:"🌨️",44:"",45:"🌧️",46:"🌨️",47:"⛈️"};return i[c]||"🌡️"}
 
 const TB=["ahora","ayer","prev","mar","est"];
-function stab(id){document.querySelectorAll(".tabs button").forEach((b,i)=>b.classList.toggle("on",TB[i]===id));TB.forEach(t=>document.getElementById("t-"+t).classList.toggle("on",t===id));if(M)showMap(id==="est")}
+function stab(id){document.querySelectorAll(".tabs button").forEach((b,i)=>b.classList.toggle("on",TB[i]===id));TB.forEach(t=>document.getElementById("t-"+t).classList.toggle("on",t===id));if(M){showMap(id==="est");if(id==="est"&&M._stBounds)setTimeout(()=>M.fitBounds(M._stBounds.pad(.15)),150)}}
 
 function showH(di){if(!HD)return;const d0=HD.validTimeLocal[0]?.substring(0,10),dd=new Date(d0);dd.setDate(dd.getDate()+di);const tgt=dd.toISOString().substring(0,10);
 let h=`<div class="hs">`,n=0;for(let i=0;i<HD.validTimeLocal.length;i++){const dt=HD.validTimeLocal[i];if(!dt.startsWith(tgt))continue;h+=`<div class="hi2"><div class="hh">${dt.substring(11,16)}</div><div class="hic">${wi(HD.iconCode[i])}</div><div class="ht" style="color:${tc(HD.temperature[i])}">${HD.temperature[i]}°</div><div class="he">💧${HD.precipChance[i]}% 💨${HD.windSpeed[i]}</div></div>`;n++}h+=`</div>`;
@@ -267,7 +267,7 @@ async function go(name,lat,lon){
     const bds=L.latLngBounds();obs.forEach(({s:st,o})=>{const m2=o?.metric;
       L.circleMarker([st.lat,st.lon],{radius:7,fillColor:tc(m2?.temp),color:"#fff",weight:1.5,fillOpacity:.9}).addTo(ML).bindPopup(`<b>${st.id}</b><br>${m2?m2.temp+"°C | "+o.humidity+"%":"Sin datos"}`).bindTooltip(st.id,{permanent:true,direction:"right",offset:[10,0],className:"map-label"});
       bds.extend([st.lat,st.lon])});
-    if(bds.isValid())M.fitBounds(bds.pad(.15));prog(100);setTimeout(hprog,500);
+    if(bds.isValid()){M._stBounds=bds}prog(100);setTimeout(hprog,500);
   }catch(e){document.getElementById("t-ahora").innerHTML=`<div class="no-data" style="color:#ef4444">Error: ${e.message}</div>`;hprog()}
 }
 </script>
