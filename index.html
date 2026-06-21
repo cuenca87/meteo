@@ -265,25 +265,30 @@ async function go(name,lat,lon){
     const aT=av(V.t),mnT=amn(V.t),mxT=amx(V.t),aH=av(V.h),aW=av(V.w),aG=amx(V.g),aP=av(V.p),aPr=av(V.pr),aD=av(V.dp),aUV=av(V.uv),aSr=av(V.sr),aDir=V.d.length?Math.round(av(V.d)):null;
     const cf=cl(aT,aH),uv2=ul(aUV);
 
-    // Tides + marine data
+    // Tides (IHM, only Atlantic/Cantabrian) + Marine data (everywhere coastal)
     prog(58);let tH="";let marH="";const pt=nearPort(lat,lon,20);
     if(pt){
-      // Tides from IHM
       try{const td2=new Date().toISOString().slice(0,10).replace(/-/g,"");const tr=await fetch(`${IB}?request=gettide&id=${pt.id}&format=json&date=${td2}`);if(tr.ok){const td=await tr.json(),ms=td.mareas?.datos?.marea;if(ms?.length){
       const utcOff=-new Date().getTimezoneOffset();
       function fixH(h){const[hh,mm]=h.split(":").map(Number);const t=hh*60+mm+utcOff;const nh=Math.floor(((t%1440)+1440)%1440/60),nm=((t%1440)+1440)%1440%60;return String(nh).padStart(2,"0")+":"+String(nm).padStart(2,"0")}
-      tH=`<div class="card"><div class="ct ct-c">Mareas — ${td.mareas.puerto}</div><div class="g4">${ms.map(m2=>{const pl=m2.tipo==="pleamar";return`<div class="m"><div class="v" style="color:${pl?"#06b6d4":"#f59e0b"}">${fixH(m2.hora)}</div><div class="l">${pl?"Pleamar":"Bajamar"}<br>${parseFloat(m2.altura).toFixed(2)} m</div></div>`}).join("")}</div></div>`}}}catch{}
-      // Marine data from Open-Meteo
-      try{const mr=await fetch(`https://marine-api.open-meteo.com/v1/marine?latitude=${pt.lat}&longitude=${pt.lon}&current=sea_surface_temperature,wave_height,wave_period,wave_direction&daily=wave_height_max,sea_surface_temperature_max&timezone=auto&forecast_days=1`);
-      if(mr.ok){const md=await mr.json(),mc=md.current;if(mc){
-        const wdl2=wl(mc.wave_direction);
-        marH=`<div class="card"><div class="ct ct-c">Estado del mar</div><div class="g4">
-          <div class="m"><div class="v" style="color:#06b6d4">${mc.sea_surface_temperature}°</div><div class="l">Temp. agua</div></div>
-          <div class="m"><div class="v">${mc.wave_height} m</div><div class="l">Oleaje</div></div>
-          <div class="m"><div class="v">${mc.wave_period} s</div><div class="l">Periodo</div></div>
-          <div class="m"><div class="v">${wa(mc.wave_direction)} ${wdl2}</div><div class="l">Dir. oleaje</div></div>
-        </div></div>`}}}catch{}
-    }
+      tH=`<div class="card"><div class="ct ct-c">Mareas — ${td.mareas.puerto}</div><div class="g4">${ms.map(m2=>{const pl=m2.tipo==="pleamar";return`<div class="m"><div class="v" style="color:${pl?"#06b6d4":"#f59e0b"}">${fixH(m2.hora)}</div><div class="l">${pl?"Pleamar":"Bajamar"}<br>${parseFloat(m2.altura).toFixed(2)} m</div></div>`}).join("")}</div></div>`}}}catch{}}
+    // Marine data: try seatemperature.info first, then Open-Meteo as fallback
+    let seaTemp=null,seaTempMin=null,waveH=null,waveD=null;
+    try{const slug=name.normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase().replace(/\s+/g,"-").replace(/[^a-z0-9-]/g,"");
+      const stR=await fetch(`https://seatemperature.info/es/${slug}-temperatura-del-agua-del-mar.html`);
+      if(stR.ok){const stHtml=await stR.text();
+        const m3=stHtml.match(/temperatura del agua[^.]*hoy es ([0-9]+\.?[0-9]*)/);if(m3)seaTemp=parseFloat(m3[1]);
+        const m4=stHtml.match(/id=s_t>([0-9]+\.?[0-9]*)/);if(m4)seaTempMin=parseFloat(m4[1])}}catch{}
+    // Open-Meteo Marine for waves (and water temp fallback)
+    try{const mr=await fetch(`https://marine-api.open-meteo.com/v1/marine?latitude=${lat}&longitude=${lon}&current=sea_surface_temperature,wave_height,wave_direction&timezone=auto&forecast_days=1`);
+      if(mr.ok){const mc=(await mr.json()).current;if(mc){if(seaTemp==null)seaTemp=mc.sea_surface_temperature;waveH=mc.wave_height;waveD=mc.wave_direction}}}catch{}
+    if(seaTemp!=null||waveH!=null){
+      marH=`<div class="card"><div class="ct ct-c">Estado del mar</div><div class="g4">
+        <div class="m"><div class="v" style="color:#06b6d4">${seaTemp!=null?seaTemp+"°":"--"}</div><div class="l">Temp. agua</div></div>
+        <div class="m"><div class="v" style="color:#06b6d4">${seaTempMin!=null?seaTempMin+"°":"--"}</div><div class="l">Temp. min</div></div>
+        <div class="m"><div class="v">${waveH!=null?waveH+" m":"--"}</div><div class="l">Oleaje</div></div>
+        <div class="m"><div class="v">${waveD!=null?wa(waveD)+" "+wl(waveD):"--"}</div><div class="l">Dir. oleaje</div></div>
+      </div></div>`}
 
     // Forecast (for current tab description + solar/lunar)
     prog(62);let fc=null,fcB="";
