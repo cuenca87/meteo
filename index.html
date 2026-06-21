@@ -273,10 +273,9 @@ async function go(name,lat,lon){
       function fixH(h){const[hh,mm]=h.split(":").map(Number);const t=hh*60+mm+utcOff;const nh=Math.floor(((t%1440)+1440)%1440/60),nm=((t%1440)+1440)%1440%60;return String(nh).padStart(2,"0")+":"+String(nm).padStart(2,"0")}
       tH=`<div class="card"><div class="ct ct-c">Mareas — ${td.mareas.puerto}</div><div class="g4">${ms.map(m2=>{const pl=m2.tipo==="pleamar";return`<div class="m"><div class="v" style="color:${pl?"#06b6d4":"#f59e0b"}">${fixH(m2.hora)}</div><div class="l">${pl?"Pleamar":"Bajamar"}<br>${parseFloat(m2.altura).toFixed(2)} m</div></div>`}).join("")}</div></div>`}}}catch{}}
     // Marine data: try seatemperature.info first, then Open-Meteo as fallback
-    let seaTemp=null,waveH=null,waveD=null;
+    let seaTemp=null,seaTempMin=null,waveH=null,waveD=null;
     try{const slug=name.normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase().replace(/\s+/g,"-").replace(/[^a-z0-9-]/g,"");
       const sfx=`${slug}-temperatura-del-agua-del-mar.html`;
-    let seaTempMin=null;
       for(const base of [`https://seatemperature.info/es/${sfx}`,`https://seatemperature.info/es/espana/${sfx}`]){
         try{const stR=await fetch(base);if(!stR.ok)continue;const stHtml=await stR.text();
           const m3=stHtml.match(/temperatura del agua[^.]*hoy es ([0-9]+\.?[0-9]*)/);if(m3){seaTemp=parseFloat(m3[1]);
