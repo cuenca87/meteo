@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#2563eb" media="(prefers-color-scheme:light)">
+<meta name="theme-color" content="#0f172a" media="(prefers-color-scheme:dark)">
+<title>Visor Meteorologico</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+:root{
+  --bg:#f5f7fa;--bg2:#fff;--bg3:#f0f2f5;--text:#1e293b;--text2:#64748b;--accent:#2563eb;
+  --accent2:#3b82f6;--border:#e2e8f0;--card-shadow:0 1px 3px rgba(0,0,0,.08);
+}
+@media(prefers-color-scheme:dark){:root{
+  --bg:#0f172a;--bg2:#1e293b;--bg3:#334155;--text:#e2e8f0;--text2:#94a3b8;--accent:#60a5fa;
+  --accent2:#3b82f6;--border:#334155;--card-shadow:0 1px 3px rgba(0,0,0,.3);
+}}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%;overflow:hidden}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;display:flex;flex-direction:column;height:100dvh;background:var(--bg);color:var(--text)}
+
+header{background:var(--accent2);padding:10px 16px;display:flex;align-items:center;gap:12px;flex-shrink:0}
+header h1{font-size:16px;font-weight:700;color:#fff;flex:1}
+header h1 small{font-weight:400;color:rgba(255,255,255,.7);font-size:11px;display:block}
+#loc-name{font-size:13px;color:#fff;font-weight:600;text-align:right;max-width:50%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;opacity:.9}
+
+.search-row{display:flex;gap:8px;padding:10px 16px;background:var(--bg2);border-bottom:1px solid var(--border);flex-shrink:0}
+.autocomplete-wrapper{position:relative;flex:1}
+#inp{width:100%;padding:10px 14px;border:1px solid var(--border);border-radius:10px;background:var(--bg);color:var(--text);font-size:14px}
+#inp:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(37,99,235,.15)}
+#btn-gps{width:42px;border:1px solid var(--border);border-radius:10px;background:var(--bg);color:var(--accent);cursor:pointer;font-size:18px;flex-shrink:0;display:flex;align-items:center;justify-content:center}
+#btn-gps:active{background:var(--accent);color:#fff}
+#sug{position:absolute;left:0;right:0;top:100%;z-index:20;background:var(--bg2);border:1px solid var(--border);border-top:none;max-height:250px;overflow-y:auto;border-radius:0 0 10px 10px;display:none;box-shadow:var(--card-shadow)}
+#sug div{padding:10px 14px;font-size:13px;cursor:pointer;border-bottom:1px solid var(--border)}
+#sug div:hover{background:var(--bg3);color:var(--accent)}
+#sug div small{color:var(--text2);font-size:11px;display:block;margin-top:2px}
+
+#pbar{display:none;margin:6px 16px;height:6px;background:var(--bg3);border-radius:3px;overflow:hidden;flex-shrink:0}
+#pbar>div{height:100%;background:var(--accent);transition:width .3s;border-radius:3px}
+
+.tabs{display:none;border-bottom:1px solid var(--border);flex-shrink:0;background:var(--bg2)}
+.tabs button{flex:1;padding:10px 4px;text-align:center;cursor:pointer;background:transparent;color:var(--text2);border:none;border-bottom:2px solid transparent;font-size:13px;font-weight:500;transition:all .15s}
+.tabs button.on{color:var(--accent);border-bottom-color:var(--accent);font-weight:600}
+
+#content{flex:1;overflow:hidden;display:flex;flex-direction:column;min-height:0}
+.tv{display:none;flex:1;overflow-y:auto;padding:12px 16px;-webkit-overflow-scrolling:touch}
+.tv.on{display:block}
+
+.hero{text-align:center;padding:20px 0 14px}
+.hero-temp{font-size:60px;font-weight:800;line-height:1;letter-spacing:-2px}
+.hero-sub{font-size:15px;margin-top:6px}
+.hero-mm{font-size:13px;color:var(--text2);margin-top:4px}
+
+.card{background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:10px;box-shadow:var(--card-shadow)}
+.ct{font-size:11px;text-transform:uppercase;letter-spacing:.6px;margin-bottom:10px;font-weight:700}
+.ct-b{color:var(--accent)}.ct-o{color:#f59e0b}.ct-c{color:#06b6d4}.ct-y{color:#eab308}
+
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+.g4{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px}
+.m{text-align:center;padding:10px 4px;background:var(--bg3);border-radius:10px}
+.m .v{font-size:18px;font-weight:700}
+.m .l{font-size:10px;color:var(--text2);margin-top:3px}
+
+.fcs{display:flex;gap:10px;overflow-x:auto;padding-bottom:6px;scroll-snap-type:x mandatory}
+.fcs::-webkit-scrollbar{height:0}
+.fd{min-width:100px;flex-shrink:0;background:var(--bg3);border:2px solid transparent;border-radius:12px;padding:12px 8px;text-align:center;cursor:pointer;scroll-snap-align:start;transition:border-color .15s}
+.fd:hover,.fd.on{border-color:var(--accent)}
+.fd-n{font-size:12px;font-weight:600;color:var(--accent);margin-bottom:6px}
+.fd-i{font-size:28px;line-height:1.2}
+.fd-t{font-size:15px;margin:6px 0}.fd-t .hi{font-weight:700}.fd-t .lo{color:var(--text2)}
+.fd-d{font-size:10px;color:var(--text2);line-height:1.5}
+.fd-p{font-size:10px;color:var(--text2);margin-top:4px;line-height:1.3}
+
+.hp{display:none;margin-top:10px}
+.hs{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;scroll-snap-type:x mandatory}
+.hs::-webkit-scrollbar{height:0}
+.hi2{min-width:58px;flex-shrink:0;text-align:center;padding:8px 4px;background:var(--bg3);border-radius:8px;scroll-snap-align:start}
+.hi2 .hh{font-size:11px;color:var(--text2)}.hi2 .hic{font-size:18px;margin:2px 0}.hi2 .ht{font-size:14px;font-weight:700}.hi2 .he{font-size:9px;color:var(--text2);margin-top:2px}
+
+#ctab{width:100%;border-collapse:collapse;font-size:11px;margin-bottom:12px}
+#ctab th{background:var(--bg3);color:var(--accent);padding:8px 5px;text-align:center;font-weight:600;position:sticky;top:0}
+#ctab td{padding:7px 5px;text-align:center;border-bottom:1px solid var(--border)}
+#ctab tr:hover td{background:var(--bg3)}
+.sc{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:12px;margin-bottom:8px;cursor:pointer;box-shadow:var(--card-shadow)}
+.sc:hover{border-color:var(--accent)}
+.sc-r{display:flex;justify-content:space-between;align-items:center}
+.sc-id{font-size:12px;font-weight:600;color:var(--accent)}.sc-h{font-size:11px;color:var(--text2)}
+.sc-t{font-size:24px;font-weight:800}
+.sc-d{display:flex;gap:10px;margin-top:6px;font-size:11px;color:var(--text2);flex-wrap:wrap}
+
+#mapc{height:200px;flex-shrink:0;border-top:1px solid var(--border);display:none}
+#map{height:100%;width:100%}
+.no-data{text-align:center;padding:40px 16px;color:var(--text2);font-size:14px;line-height:1.6}
+
+@media(min-width:769px){
+  body{flex-direction:row}
+  .main-col{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:440px}
+  #mapc{height:auto;flex:1;border-top:none;border-left:1px solid var(--border);min-width:280px}
+}
+</style>
+</head>
+<body>
+<div class="main-col">
+<header><h1>Visor Meteorologico<small>Estaciones personales + IHM</small></h1><div id="loc-name"></div></header>
+<div class="search-row">
+  <div class="autocomplete-wrapper"><input id="inp" placeholder="Buscar municipio..." autocomplete="off"><div id="sug"></div></div>
+  <button id="btn-gps" title="Mi ubicacion">&#9737;</button>
+</div>
+<div id="pbar"><div></div></div>
+<div class="tabs" id="tabs">
+  <button class="on" onclick="stab('ahora')">Ahora</button>
+  <button onclick="stab('ayer')">Ayer</button>
+  <button onclick="stab('prev')">Prevision</button>
+  <button onclick="stab('est')">Estaciones</button>
+</div>
+<div id="content">
+  <div id="t-ahora" class="tv on"><div class="no-data">Busque un municipio o pulse &#9737;<br>para ver el tiempo en su ubicacion</div></div>
+  <div id="t-ayer" class="tv"></div>
+  <div id="t-prev" class="tv"></div>
+  <div id="t-est" class="tv"></div>
+</div>
+</div>
+<div id="mapc"><div id="map"></div></div>
+
+<script>
+if("serviceWorker"in navigator)navigator.serviceWorker.register("sw.js").catch(()=>{});
+const AK="e1f10a1e78da46f5b10a1e78da96f525",WB="https://api.weather.com",IB="https://ideihm.covam.es/api-ihm/getmarea";
+let ports=null,M=null,ML=null,HD=null;
+
+function initMap(){if(M)return;document.getElementById("mapc").style.display="block";M=L.map("map").setView([39.5,-3],6);
+const dk=matchMedia("(prefers-color-scheme:dark)").matches;
+const light=L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",{attribution:'&copy; <a href="https://carto.com">CARTO</a>',maxZoom:19});
+const dark=L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",{attribution:'&copy; <a href="https://carto.com">CARTO</a>',maxZoom:19});
+const pnoa=L.tileLayer("https://www.ign.es/wmts/pnoa-ma?layer=OI.OrthoimageCoverage&style=default&tilematrixset=GoogleMapsCompatible&Service=WMTS&Request=GetTile&Version=1.0.0&format=image/jpeg&TileMatrix={z}&TileRow={y}&TileCol={x}",{attribution:"PNOA &copy; IGN",maxZoom:19});
+(dk?dark:light).addTo(M);L.control.layers({"Claro":light,"Oscuro":dark,"Satelite":pnoa}).addTo(M);ML=L.layerGroup().addTo(M)}
+
+(async()=>{try{const r=await fetch(`${IB}?request=getlist&format=json`);if(r.ok){const d=await r.json();ports=d.estaciones?.puertos||[]}}catch{}})();
+function nearPort(la,lo,km){if(!ports)return null;let b=null,bd=1e9;for(const p of ports){const d=Math.sqrt((parseFloat(p.lat)-la)**2+(parseFloat(p.lon)-lo)**2)*111.32;if(d<bd&&d<=km){bd=d;b={...p,dist:d}}}return b}
+
+function prog(p){const b=document.getElementById("pbar");b.style.display="block";b.querySelector("div").style.width=Math.min(p,100)+"%"}
+function hprog(){document.getElementById("pbar").style.display="none"}
+function tc(t){if(t==null)return"var(--text2)";if(t<=0)return"#3b82f6";if(t<=10)return"#06b6d4";if(t<=20)return"#22c55e";if(t<=30)return"#f59e0b";if(t<=35)return"#ef4444";return"#dc2626"}
+function wa(d){return d==null?"":`<span style="display:inline-block;transform:rotate(${d}deg);color:var(--accent)">↓</span>`}
+function wl(d){if(d==null)return"-";return["N","NNE","NE","ENE","E","ESE","SE","SSE","S","SSO","SO","OSO","O","ONO","NO","NNO"][Math.round(d/22.5)%16]}
+function ta(u){if(!u)return"-";const d=Math.floor((Date.now()-new Date(u).getTime())/60000);if(d<1)return"ahora";if(d<60)return d+"min";if(d<1440)return Math.floor(d/60)+"h";return Math.floor(d/1440)+"d"}
+function cl(t,h){if(t==null||h==null)return{t:"-",c:"var(--text2)"};if(t<5)return{t:"Frio intenso",c:"#3b82f6"};if(t<12)return{t:"Frio",c:"#06b6d4"};if(t<18)return{t:"Fresco",c:"#22c55e"};if(t<=26&&h<=60)return{t:"Confortable",c:"#10b981"};if(t<=26)return{t:"Algo humedo",c:"#84cc16"};if(t<=32&&h<=40)return{t:"Caluroso",c:"#f59e0b"};if(t<=32)return{t:"Bochornoso",c:"#f97316"};return{t:"Calor extremo",c:"#ef4444"}}
+function ul(u){if(u==null)return{t:"-",c:"var(--text2)"};if(u<=2)return{t:"Bajo",c:"#22c55e"};if(u<=5)return{t:"Moderado",c:"#eab308"};if(u<=7)return{t:"Alto",c:"#f97316"};if(u<=10)return{t:"Muy alto",c:"#ef4444"};return{t:"Extremo",c:"#a855f7"}}
+function wi(c){if(c==null)return"";const i={0:"🌪️",1:"⛈️",2:"⛈️",3:"⛈️",4:"⛈️",5:"🌨️",6:"🌧️",7:"🌨️",8:"🌧️",9:"🌧️",10:"🌧️",11:"🌧️",12:"🌧️",13:"🌨️",14:"🌨️",15:"🌨️",16:"🌨️",17:"🌧️",18:"🌧️",19:"🌫️",20:"🌫️",21:"🌫️",22:"🌫️",23:"💨",24:"💨",25:"❄️",26:"☁️",27:"🌥️",28:"🌥️",29:"⛅",30:"⛅",31:"🌙",32:"☀️",33:"🌙",34:"☀️",35:"🌧️",36:"🔥",37:"⛈️",38:"⛈️",39:"🌧️",40:"🌧️",41:"🌨️",42:"🌨️",43:"🌨️",44:"",45:"🌧️",46:"🌨️",47:"⛈️"};return i[c]||"🌡️"}
+
+const TB=["ahora","ayer","prev","est"];
+function stab(id){document.querySelectorAll(".tabs button").forEach((b,i)=>b.classList.toggle("on",TB[i]===id));TB.forEach(t=>document.getElementById("t-"+t).classList.toggle("on",t===id))}
+
+function showH(di){if(!HD)return;const d0=HD.validTimeLocal[0]?.substring(0,10),dd=new Date(d0);dd.setDate(dd.getDate()+di);const tgt=dd.toISOString().substring(0,10);
+let h=`<div class="hs">`,n=0;for(let i=0;i<HD.validTimeLocal.length;i++){const dt=HD.validTimeLocal[i];if(!dt.startsWith(tgt))continue;h+=`<div class="hi2"><div class="hh">${dt.substring(11,16)}</div><div class="hic">${wi(HD.iconCode[i])}</div><div class="ht" style="color:${tc(HD.temperature[i])}">${HD.temperature[i]}°</div><div class="he">💧${HD.precipChance[i]}% 💨${HD.windSpeed[i]}</div></div>`;n++}h+=`</div>`;
+const p=document.getElementById("hp");if(n){p.innerHTML=h;p.style.display="block"}else p.style.display="none";
+document.querySelectorAll(".fd").forEach((d,i)=>d.classList.toggle("on",i===di))}
+
+let deb=null;const inp=document.getElementById("inp"),sg=document.getElementById("sug");
+inp.addEventListener("input",function(){clearTimeout(deb);const q=this.value.trim();if(q.length<3){sg.style.display="none";return}deb=setTimeout(async()=>{try{const r=await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)},España&format=json&limit=8&addressdetails=1&accept-language=es`);if(!r.ok)return;const res=await r.json(),f=res.filter(r=>["city","town","village","municipality","administrative"].includes(r.type)||r.class==="place");if(!f.length){sg.style.display="none";return}sg.innerHTML="";for(const r of f){const d=document.createElement("div"),p=r.display_name.split(","),n=p[0].trim();d.innerHTML=n+`<small>${p.slice(1,3).map(s=>s.trim()).join(", ")}</small>`;d.addEventListener("click",()=>{inp.value=n;sg.style.display="none";go(n,+r.lat,+r.lon)});sg.appendChild(d)}sg.style.display="block"}catch{}},400)});
+inp.addEventListener("keydown",e=>{if(e.key==="Enter"){sg.style.display="none";const q=inp.value.trim();if(q.length>=2)(async()=>{try{const r=await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)},España&format=json&limit=1&accept-language=es`);if(!r.ok)return;const res=await r.json();if(res.length)go(res[0].display_name.split(",")[0].trim(),+res[0].lat,+res[0].lon)}catch{}})()}});
+document.addEventListener("click",e=>{if(!e.target.closest(".autocomplete-wrapper"))sg.style.display="none"});
+
+document.getElementById("btn-gps").addEventListener("click",()=>{if(!navigator.geolocation){alert("Geolocalizacion no disponible");return}prog(5);
+navigator.geolocation.getCurrentPosition(async p=>{const la=p.coords.latitude,lo=p.coords.longitude;try{const r=await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${la}&lon=${lo}&format=json&accept-language=es`);if(r.ok){const d=await r.json(),n=d.address?.city||d.address?.town||d.address?.village||d.address?.municipality||"Mi ubicacion";inp.value=n;go(n,la,lo)}else go("Mi ubicacion",la,lo)}catch{go("Mi ubicacion",la,lo)}},er=>{hprog();alert("Error: "+er.message)},{enableHighAccuracy:true,timeout:10000})});
+
+async function go(name,lat,lon){
+  initMap();ML.clearLayers();HD=null;
+  document.getElementById("loc-name").textContent=name;
+  document.getElementById("tabs").style.display="flex";
+  TB.forEach(t=>{document.getElementById("t-"+t).innerHTML=""});stab("ahora");
+  prog(10);M.setView([lat,lon],13);
+
+  try{
+    const nr=await fetch(`${WB}/v3/location/near?geocode=${lat},${lon}&product=pws&format=json&apiKey=${AK}`);
+    if(!nr.ok)throw new Error("Error API");const nd=await nr.json(),lo2=nd.location;
+    if(!lo2?.stationId?.length){document.getElementById("t-ahora").innerHTML=`<div class="no-data">No se encontraron estaciones cerca de ${name}.</div>`;hprog();return}
+    const mx2=10,sts=[];for(let i=0;i<lo2.stationId.length;i++)if(lo2.distanceKm[i]<=mx2)sts.push({id:lo2.stationId[i],name:lo2.stationName[i],lat:lo2.latitude[i],lon:lo2.longitude[i],dist:lo2.distanceKm[i]});
+    if(!sts.length){document.getElementById("t-ahora").innerHTML=`<div class="no-data">No hay estaciones en ${mx2} km.</div>`;hprog();return}
+
+    prog(20);const obs=[];
+    for(let i=0;i<sts.length;i++){const s=sts[i];prog(20+(i/sts.length)*35);try{const r=await fetch(`${WB}/v2/pws/observations/current?stationId=${s.id}&format=json&units=m&apiKey=${AK}&numericPrecision=decimal`);if(r.ok&&r.status!==204){const d=await r.json(),o=d.observations?.[0];if(o){obs.push({s,o});continue}}}catch{}obs.push({s,o:null})}
+
+    const vl=obs.filter(x=>x.o?.metric),V={t:[],h:[],w:[],g:[],p:[],pr:[],dp:[],d:[],uv:[],sr:[]};
+    vl.forEach(({o})=>{const m=o.metric;if(m.temp!=null)V.t.push(m.temp);if(o.humidity!=null)V.h.push(o.humidity);if(m.windSpeed!=null)V.w.push(m.windSpeed);if(m.windGust!=null)V.g.push(m.windGust);if(m.pressure!=null)V.p.push(m.pressure);if(m.precipTotal!=null)V.pr.push(m.precipTotal);if(m.dewpt!=null)V.dp.push(m.dewpt);if(o.winddir!=null)V.d.push(o.winddir);if(o.uv!=null)V.uv.push(o.uv);if(o.solarRadiation!=null)V.sr.push(o.solarRadiation)});
+    const av=a=>a.length?a.reduce((x,y)=>x+y,0)/a.length:null,amx=a=>a.length?Math.max(...a):null,amn=a=>a.length?Math.min(...a):null;
+    const aT=av(V.t),mnT=amn(V.t),mxT=amx(V.t),aH=av(V.h),aW=av(V.w),aG=amx(V.g),aP=av(V.p),aPr=av(V.pr),aD=av(V.dp),aUV=av(V.uv),aSr=av(V.sr),aDir=V.d.length?Math.round(av(V.d)):null;
+    const cf=cl(aT,aH),uv2=ul(aUV);
+
+    // Tides
+    prog(58);let tH="";const pt=nearPort(lat,lon,20);
+    if(pt){try{const td2=new Date().toISOString().slice(0,10).replace(/-/g,"");const tr=await fetch(`${IB}?request=gettide&id=${pt.id}&format=json&date=${td2}`);if(tr.ok){const td=await tr.json(),ms=td.mareas?.datos?.marea;if(ms?.length){tH=`<div class="card"><div class="ct ct-c">Mareas — ${td.mareas.puerto}</div><div class="g4">${ms.map(m2=>{const pl=m2.tipo==="pleamar";return`<div class="m"><div class="v" style="color:${pl?"#06b6d4":"#f59e0b"}">${m2.hora}</div><div class="l">${pl?"Pleamar":"Bajamar"}<br>${parseFloat(m2.altura).toFixed(2)} m</div></div>`}).join("")}</div></div>`}}}catch{}}
+
+    // Forecast + hourly
+    prog(62);let fc=null,fcB="";
+    try{const[fr,hr]=await Promise.all([fetch(`${WB}/v3/wx/forecast/daily/5day?apiKey=${AK}&geocode=${lat},${lon}&units=m&language=es-ES&format=json`),fetch(`${WB}/v3/wx/forecast/hourly/2day?apiKey=${AK}&geocode=${lat},${lon}&units=m&language=es-ES&format=json`)]);
+    if(fr.ok)fc=await fr.json();if(hr.ok)HD=await hr.json();
+    if(fc){const dp=fc.daypart?.[0]||{};const ic=dp.iconCode?.[0]??dp.iconCode?.[1],ph=dp.wxPhraseLong?.[0]??dp.wxPhraseLong?.[1]??"";fcB=`<div style="text-align:center;margin-bottom:10px;font-size:14px;color:var(--text2)">${wi(ic)} ${ph}</div>`}}catch{}
+
+    const sr2=fc?.sunriseTimeLocal?.[0],ss2=fc?.sunsetTimeLocal?.[0],mn2=fc?.moonPhase?.[0];
+    let soH="";if(sr2||ss2){const srt=sr2?sr2.substring(11,16):"--",sst=ss2?ss2.substring(11,16):"--";let dl="--";if(sr2&&ss2){const df=(new Date(ss2)-new Date(sr2))/3600000;dl=Math.floor(df)+"h "+Math.round((df-Math.floor(df))*60)+"m"}const mi2=(mn2||"").includes("llena")?"🌕":(mn2||"").includes("nueva")?"🌑":(mn2||"").includes("creciente")?"🌓":"🌗";
+    soH=`<div class="card"><div class="ct ct-y">Sol y luna</div><div class="g4"><div class="m"><div class="v">🌅</div><div class="l">${srt}<br>Amanecer</div></div><div class="m"><div class="v">🌇</div><div class="l">${sst}<br>Atardecer</div></div><div class="m"><div class="v">☀️</div><div class="l">${dl}<br>Horas luz</div></div><div class="m"><div class="v">${mi2}</div><div class="l" style="font-size:9px">${mn2||"-"}</div></div></div></div>`}
+
+    // TAB AHORA
+    document.getElementById("t-ahora").innerHTML=`<div class="hero"><div class="hero-temp" style="color:${tc(aT)}">${aT!=null?aT.toFixed(1):"--"}°</div><div class="hero-sub" style="color:${cf.c}">${cf.t}</div><div class="hero-mm">Min <b style="color:${tc(mnT)}">${mnT!=null?mnT.toFixed(1):"--"}°</b> · Max <b style="color:${tc(mxT)}">${mxT!=null?mxT.toFixed(1):"--"}°</b></div></div>${fcB}<div class="card"><div class="g3"><div class="m"><div class="v">${aH!=null?aH.toFixed(0):"--"}%</div><div class="l">Humedad</div></div><div class="m"><div class="v">${aW!=null?aW.toFixed(1):"--"}<small> km/h</small></div><div class="l">${wa(aDir)} ${wl(aDir)} Viento</div></div><div class="m"><div class="v">${aG!=null?aG.toFixed(1):"--"}<small> km/h</small></div><div class="l">Racha max</div></div><div class="m"><div class="v">${aPr!=null?aPr.toFixed(1):"--"}<small> mm</small></div><div class="l">Precipitacion</div></div><div class="m"><div class="v">${aP!=null?aP.toFixed(1):"--"}</div><div class="l">Presion hPa</div></div><div class="m"><div class="v">${aD!=null?aD.toFixed(1):"--"}°</div><div class="l">Pto. rocio</div></div></div></div><div class="card"><div class="g3"><div class="m"><div class="v" style="color:${uv2.c}">${aUV!=null?aUV.toFixed(1):"--"}</div><div class="l">UV ${uv2.t}</div></div><div class="m"><div class="v">${aSr!=null?aSr.toFixed(0):"--"}<small> W/m²</small></div><div class="l">Radiacion</div></div><div class="m"><div class="v">${vl.length}</div><div class="l">Estaciones</div></div></div></div>${tH}${soH}`;
+
+    // TAB AYER
+    prog(68);const HH={tMax:[],tMin:[],gMax:[],precip:[],hMax:[],hMin:[],pF:[],pL:[],wMax:[],wAvg:[]};let h24n=0;
+    for(let i=0;i<vl.length;i++){const st=vl[i].s;prog(68+(i/vl.length)*18);
+      try{const r=await fetch(`${WB}/v2/pws/observations/all/1day?stationId=${st.id}&format=json&units=m&apiKey=${AK}&numericPrecision=decimal`);if(!r.ok||r.status===204)continue;const recs=(await r.json()).observations||[];if(!recs.length)continue;
+      let s2={tMax:-999,tMin:999,gMax:0,pMax:0,hMax:0,hMin:999,wMax:0,wS:0,wN:0};
+      recs.forEach(r2=>{const mm=r2.metric;if(mm.tempHigh>s2.tMax)s2.tMax=mm.tempHigh;if(mm.tempLow<s2.tMin)s2.tMin=mm.tempLow;if(mm.windgustHigh>s2.gMax)s2.gMax=mm.windgustHigh;if(mm.windspeedHigh>s2.wMax)s2.wMax=mm.windspeedHigh;s2.wS+=mm.windspeedAvg;s2.wN++;if(mm.precipTotal>s2.pMax)s2.pMax=mm.precipTotal;if(r2.humidityHigh>s2.hMax)s2.hMax=r2.humidityHigh;if(r2.humidityLow<s2.hMin)s2.hMin=r2.humidityLow});
+      HH.tMax.push(s2.tMax);HH.tMin.push(s2.tMin);HH.gMax.push(s2.gMax);HH.precip.push(s2.pMax);HH.hMax.push(s2.hMax);HH.hMin.push(s2.hMin);HH.pF.push(recs[0].metric.pressureMax);HH.pL.push(recs[recs.length-1].metric.pressureMax);HH.wMax.push(s2.wMax);HH.wAvg.push(s2.wN?s2.wS/s2.wN:0);h24n++}catch{}}
+    if(h24n){const a2=ar=>ar.reduce((x,y)=>x+y,0)/ar.length;const hT=a2(HH.tMax),lT=a2(HH.tMin),hG=a2(HH.gMax),hP=a2(HH.precip),hHx=a2(HH.hMax),hHn=a2(HH.hMin),hWm=a2(HH.wMax),hWa=a2(HH.wAvg);const pD=a2(HH.pL)-a2(HH.pF),pT=pD>2?`↗ +${pD.toFixed(1)} hPa Subiendo`:pD<-2?`↘ ${pD.toFixed(1)} hPa Bajando`:"→ Estable";
+    document.getElementById("t-ayer").innerHTML=`<div class="card"><div class="ct ct-o">Ultimas 24 horas — ${h24n} estaciones</div><div style="text-align:center;padding:12px 0"><span style="color:var(--text2)">Min</span> <b style="color:${tc(lT)};font-size:30px">${lT.toFixed(1)}°</b> <span style="margin:0 16px;color:var(--border)">|</span> <span style="color:var(--text2)">Max</span> <b style="color:${tc(hT)};font-size:30px">${hT.toFixed(1)}°</b><div style="font-size:12px;color:var(--text2);margin-top:6px">Amplitud: ${(hT-lT).toFixed(1)}°</div></div><div class="g3"><div class="m"><div class="v">${hP.toFixed(1)}<small> mm</small></div><div class="l">Precipitacion</div></div><div class="m"><div class="v">${hHn.toFixed(0)}–${hHx.toFixed(0)}%</div><div class="l">Rango humedad</div></div><div class="m"><div class="v">${hWa.toFixed(1)}<small> km/h</small></div><div class="l">Viento medio</div></div><div class="m"><div class="v">${hWm.toFixed(1)}<small> km/h</small></div><div class="l">Viento max</div></div><div class="m"><div class="v">${hG.toFixed(1)}<small> km/h</small></div><div class="l">Racha max</div></div><div class="m"><div class="v" style="font-size:13px">${pT}</div><div class="l">Presion</div></div></div></div>`}
+    else document.getElementById("t-ayer").innerHTML=`<div class="no-data">Sin datos historicos.</div>`;
+
+    // TAB PREVISION
+    prog(88);if(fc){const dp=fc.daypart?.[0]||{};let fH=`<div class="card"><div class="ct ct-b">Prevision 5 dias</div><div class="fcs">`;
+    for(let i=0;i<fc.dayOfWeek.length;i++){const hi=fc.temperatureMax[i],lo3=fc.temperatureMin[i],di=i*2,ni=i*2+1;const icon=dp.iconCode?.[di]??dp.iconCode?.[ni],phrase=dp.wxPhraseLong?.[di]??dp.wxPhraseLong?.[ni]??"",precip=dp.precipChance?.[di]??dp.precipChance?.[ni],wind=dp.windSpeed?.[di]??dp.windSpeed?.[ni],wdir=dp.windDirectionCardinal?.[di]??dp.windDirectionCardinal?.[ni]??"";
+    fH+=`<div class="fd" onclick="showH(${i})"><div class="fd-n">${i===0?"Hoy":fc.dayOfWeek[i]}</div><div class="fd-i">${wi(icon)}</div><div class="fd-t"><span class="hi" style="color:${tc(hi)}">${hi!=null?hi+"°":"--"}</span> <span class="lo">${lo3!=null?lo3+"°":"--"}</span></div><div class="fd-d">${precip!=null?"💧"+precip+"% ":""}${wind!=null?"💨"+wind+" "+wdir:""}</div><div class="fd-p">${phrase}</div></div>`}
+    fH+=`</div><div id="hp" class="hp"></div></div>${soH}`;
+    document.getElementById("t-prev").innerHTML=fH;showH(0)}
+    else document.getElementById("t-prev").innerHTML=`<div class="no-data">Prevision no disponible.</div>`;
+
+    // TAB ESTACIONES
+    prog(95);let sH=`<table id="ctab"><tr><th>ID</th><th>Temp</th><th>Hum</th><th>Viento</th><th>Precip</th><th>Pres</th></tr>`;
+    obs.forEach(({s:st,o})=>{const m2=o?.metric;if(!m2)return;sH+=`<tr><td style="text-align:left;color:var(--accent)">${st.id}</td><td style="color:${tc(m2.temp)};font-weight:700">${m2.temp}°</td><td>${o.humidity}%</td><td>${m2.windSpeed} ${wl(o.winddir)}</td><td>${m2.precipTotal}</td><td>${m2.pressure}</td></tr>`});sH+=`</table>`;
+    obs.forEach(({s:st,o})=>{const m2=o?.metric;if(!m2)return;sH+=`<div class="sc" onclick="M.setView([${st.lat},${st.lon}],15)"><div class="sc-r"><div><div class="sc-id">${st.id}</div><div class="sc-h">${o.neighborhood||st.name} · ${st.dist.toFixed(1)} km · ${ta(o.obsTimeUtc)}</div></div><div class="sc-t" style="color:${tc(m2.temp)}">${m2.temp}°</div></div><div class="sc-d"><span>💧${o.humidity}%</span><span>💨${m2.windSpeed} ${wl(o.winddir)}</span><span>🌧️${m2.precipTotal} mm</span><span>⏱️${m2.pressure}</span>${o.uv!=null?`<span style="color:${ul(o.uv).c}">☀️UV ${o.uv}</span>`:""}</div></div>`});
+    document.getElementById("t-est").innerHTML=sH;
+
+    const bds=L.latLngBounds();obs.forEach(({s:st,o})=>{const m2=o?.metric;L.circleMarker([st.lat,st.lon],{radius:7,fillColor:tc(m2?.temp),color:"#fff",weight:1.5,fillOpacity:.9}).addTo(ML).bindPopup(`<b>${st.id}</b><br>${m2?m2.temp+"°C | "+o.humidity+"%":"Sin datos"}`);bds.extend([st.lat,st.lon])});
+    if(bds.isValid())M.fitBounds(bds.pad(.15));prog(100);setTimeout(hprog,500);
+  }catch(e){document.getElementById("t-ahora").innerHTML=`<div class="no-data" style="color:#ef4444">Error: ${e.message}</div>`;hprog()}
+}
+</script>
+</body>
+</html>
