@@ -94,13 +94,15 @@ header h1 small{font-weight:400;color:rgba(255,255,255,.7);font-size:11px;displa
 .sc-t{font-size:24px;font-weight:800}
 .sc-d{display:flex;gap:10px;margin-top:6px;font-size:11px;color:var(--text2);flex-wrap:wrap}
 
+.main-col{flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0}
+
 #mapc{height:200px;flex-shrink:0;border-top:1px solid var(--border);display:none}
 #map{height:100%;width:100%}
 .no-data{text-align:center;padding:40px 16px;color:var(--text2);font-size:14px;line-height:1.6}
 
 @media(min-width:769px){
   body{flex-direction:row}
-  .main-col{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:440px}
+  .main-col{min-width:440px}
   #mapc{height:auto;flex:1;border-top:none;border-left:1px solid var(--border);min-width:280px}
 }
 </style>
