@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#2563eb" media="(prefers-color-scheme:light)">
-<meta name="theme-color" content="#0f172a" media="(prefers-color-scheme:dark)">
+<meta name="theme-color" content="#000" media="(prefers-color-scheme:dark)">
 <title>Visor Meteorologico</title>
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
@@ -17,8 +17,8 @@
   --accent2:#3b82f6;--border:#e2e8f0;--card-shadow:0 1px 3px rgba(0,0,0,.08);
 }
 @media(prefers-color-scheme:dark){:root{
-  --bg:#0f172a;--bg2:#1e293b;--bg3:#334155;--text:#e2e8f0;--text2:#94a3b8;--accent:#60a5fa;
-  --accent2:#3b82f6;--border:#334155;--card-shadow:0 1px 3px rgba(0,0,0,.3);
+  --bg:#000;--bg2:#111;--bg3:#1a1a1a;--text:#e2e8f0;--text2:#94a3b8;--accent:#60a5fa;
+  --accent2:#3b82f6;--border:#222;--card-shadow:0 1px 4px rgba(0,0,0,.5);
 }}
 *{margin:0;padding:0;box-sizing:border-box}
 html,body{height:100%;overflow:hidden}
@@ -167,7 +167,7 @@ function wl(d){if(d==null)return"-";return["N","NNE","NE","ENE","E","ESE","SE","
 function ta(u){if(!u)return"-";const d=Math.floor((Date.now()-new Date(u).getTime())/60000);if(d<1)return"ahora";if(d<60)return d+"min";if(d<1440)return Math.floor(d/60)+"h";return Math.floor(d/1440)+"d"}
 function cl(t,h){if(t==null||h==null)return{t:"-",c:"var(--text2)"};if(t<5)return{t:"Frio intenso",c:"#3b82f6"};if(t<12)return{t:"Frio",c:"#06b6d4"};if(t<18)return{t:"Fresco",c:"#22c55e"};if(t<=26&&h<=60)return{t:"Confortable",c:"#10b981"};if(t<=26)return{t:"Algo humedo",c:"#84cc16"};if(t<=32&&h<=40)return{t:"Caluroso",c:"#f59e0b"};if(t<=32)return{t:"Bochornoso",c:"#f97316"};return{t:"Calor extremo",c:"#ef4444"}}
 function ul(u){if(u==null)return{t:"-",c:"var(--text2)"};if(u<=2)return{t:"Bajo",c:"#22c55e"};if(u<=5)return{t:"Moderado",c:"#eab308"};if(u<=7)return{t:"Alto",c:"#f97316"};if(u<=10)return{t:"Muy alto",c:"#ef4444"};return{t:"Extremo",c:"#a855f7"}}
-function wi(c){if(c==null)return"";const i={0:"🌪️",1:"⛈️",2:"⛈️",3:"⛈️",4:"⛈️",5:"🌨️",6:"🌧️",7:"🌨️",8:"🌧️",9:"🌧️",10:"🌧️",11:"🌧️",12:"🌧️",13:"🌨️",14:"🌨️",15:"🌨️",16:"🌨️",17:"🌧️",18:"🌧️",19:"🌫️",20:"🌫️",21:"🌫️",22:"🌫️",23:"💨",24:"💨",25:"❄️",26:"☁️",27:"🌥️",28:"🌥️",29:"⛅",30:"⛅",31:"🌙",32:"☀️",33:"🌙",34:"☀️",35:"🌧️",36:"🔥",37:"⛈️",38:"⛈️",39:"🌧️",40:"🌧️",41:"🌨️",42:"🌨️",43:"🌨️",44:"",45:"🌧️",46:"🌨️",47:"⛈️"};return i[c]||"🌡️"}
+function wi(c){if(c==null)return"";const i={0:"🌀",1:"⛈",2:"⛈",3:"⛈",4:"⛈",5:"🌨",6:"🌧",7:"🌨",8:"🌧",9:"🌧",10:"🌧",11:"🌧",12:"🌧",13:"🌨",14:"🌨",15:"🌨",16:"🌨",17:"🌧",18:"🌧",19:"🌫",20:"🌫",21:"🌫",22:"🌫",23:"🌬",24:"🌬",25:"❄",26:"☁",27:"🌥",28:"🌥",29:"⛅",30:"⛅",31:"🌙",32:"☀",33:"🌙",34:"☀",35:"🌧",36:"🌡",37:"⛈",38:"⛈",39:"🌦",40:"🌦",41:"🌨",42:"🌨",43:"🌨",44:"",45:"🌦",46:"🌨",47:"⛈"};return i[c]||"🌡"}
 
 const TB=["ahora","ayer","prev","mar","est"];
 function stab(id){document.querySelectorAll(".tabs button").forEach((b,i)=>b.classList.toggle("on",TB[i]===id));TB.forEach(t=>document.getElementById("t-"+t).classList.toggle("on",t===id));if(M){showMap(id==="est");if(id==="est"&&M._stBounds)setTimeout(()=>M.fitBounds(M._stBounds.pad(.15)),150)}}
@@ -196,7 +196,9 @@ async function go(name,lat,lon){
     const nr=await fetch(`${WB}/v3/location/near?geocode=${lat},${lon}&product=pws&format=json&apiKey=${AK}`);
     if(!nr.ok)throw new Error("Error API");const nd=await nr.json(),lo2=nd.location;
     if(!lo2?.stationId?.length){document.getElementById("t-ahora").innerHTML=`<div class="no-data">No se encontraron estaciones cerca de ${name}.</div>`;hprog();return}
-    const mx2=10,sts=[];for(let i=0;i<lo2.stationId.length;i++)if(lo2.distanceKm[i]<=mx2)sts.push({id:lo2.stationId[i],name:lo2.stationName[i],lat:lo2.latitude[i],lon:lo2.longitude[i],dist:lo2.distanceKm[i]});
+    const nameNorm=name.normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase();
+    const mx2=10,sts=[];for(let i=0;i<lo2.stationId.length;i++){const sn=lo2.stationName[i]?.normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase()||"";if(lo2.distanceKm[i]<=mx2&&sn===nameNorm)sts.push({id:lo2.stationId[i],name:lo2.stationName[i],lat:lo2.latitude[i],lon:lo2.longitude[i],dist:lo2.distanceKm[i]});}
+    if(!sts.length)for(let i=0;i<lo2.stationId.length;i++)if(lo2.distanceKm[i]<=mx2)sts.push({id:lo2.stationId[i],name:lo2.stationName[i],lat:lo2.latitude[i],lon:lo2.longitude[i],dist:lo2.distanceKm[i]});
     if(!sts.length){document.getElementById("t-ahora").innerHTML=`<div class="no-data">No hay estaciones en ${mx2} km.</div>`;hprog();return}
 
     prog(20);const obs=[];
@@ -216,7 +218,7 @@ async function go(name,lat,lon){
     prog(62);let fc=null,fcB="";
     try{const[fr,hr]=await Promise.all([fetch(`${WB}/v3/wx/forecast/daily/5day?apiKey=${AK}&geocode=${lat},${lon}&units=m&language=es-ES&format=json`),fetch(`${WB}/v3/wx/forecast/hourly/2day?apiKey=${AK}&geocode=${lat},${lon}&units=m&language=es-ES&format=json`)]);
     if(fr.ok)fc=await fr.json();if(hr.ok)HD=await hr.json();
-    if(fc){const dp=fc.daypart?.[0]||{};const ic=dp.iconCode?.[0]??dp.iconCode?.[1],ph=dp.wxPhraseLong?.[0]??dp.wxPhraseLong?.[1]??"";fcB=`<div style="text-align:center;margin-bottom:10px;font-size:14px;color:var(--text2)">${wi(ic)} ${ph}</div>`}}catch{}
+    if(fc){const dp=fc.daypart?.[0]||{};const ic=dp.iconCode?.[0]??dp.iconCode?.[1],ph=dp.wxPhraseLong?.[0]??dp.wxPhraseLong?.[1]??"";fcB=`<div style="text-align:center;margin-bottom:20px;font-size:14px;color:var(--text2)">${wi(ic)} ${ph}</div>`}}catch{}
 
     const sr2=fc?.sunriseTimeLocal?.[0],ss2=fc?.sunsetTimeLocal?.[0],mn2=fc?.moonPhase?.[0];
     let soH="";if(sr2||ss2){const srt=sr2?sr2.substring(11,16):"--",sst=ss2?ss2.substring(11,16):"--";let dl="--";if(sr2&&ss2){const df=(new Date(ss2)-new Date(sr2))/3600000;dl=Math.floor(df)+"h "+Math.round((df-Math.floor(df))*60)+"m"}const mi2=(mn2||"").includes("llena")?"🌕":(mn2||"").includes("nueva")?"🌑":(mn2||"").includes("creciente")?"🌓":"🌗";
@@ -239,16 +241,35 @@ async function go(name,lat,lon){
     // TAB LUNA/MAREAS
     document.getElementById("t-mar").innerHTML=(soH||tH)?`${soH}${tH}`:`<div class="no-data">No hay informacion de mareas para este municipio (no es costero).</div>`;
 
-    // TAB AYER
-    prog(68);const HH={tMax:[],tMin:[],gMax:[],precip:[],hMax:[],hMin:[],pF:[],pL:[],wMax:[],wAvg:[]};let h24n=0;
+    // TAB AYER (daily summary of yesterday)
+    prog(68);const yDate=new Date();yDate.setDate(yDate.getDate()-1);const yStr=yDate.toISOString().slice(0,10).replace(/-/g,"");
+    const yDow=["Domingo","Lunes","Martes","Miercoles","Jueves","Viernes","Sabado"][yDate.getDay()];
+    const yLabel=`${yDow} ${yDate.getDate()}/${yDate.getMonth()+1}`;
+    const YY={tMax:[],tMin:[],tAvg:[],gMax:[],precip:[],hMax:[],hMin:[],hAvg:[],wMax:[],wAvg:[],pMax:[],pMin:[],uvMax:[],srMax:[]};let yN=0;
     for(let i=0;i<vl.length;i++){const st=vl[i].s;prog(68+(i/vl.length)*18);
-      try{const r=await fetch(`${WB}/v2/pws/observations/all/1day?stationId=${st.id}&format=json&units=m&apiKey=${AK}&numericPrecision=decimal`);if(!r.ok||r.status===204)continue;const recs=(await r.json()).observations||[];if(!recs.length)continue;
-      let s2={tMax:-999,tMin:999,gMax:0,pMax:0,hMax:0,hMin:999,wMax:0,wS:0,wN:0};
-      recs.forEach(r2=>{const mm=r2.metric;if(mm.tempHigh>s2.tMax)s2.tMax=mm.tempHigh;if(mm.tempLow<s2.tMin)s2.tMin=mm.tempLow;if(mm.windgustHigh>s2.gMax)s2.gMax=mm.windgustHigh;if(mm.windspeedHigh>s2.wMax)s2.wMax=mm.windspeedHigh;s2.wS+=mm.windspeedAvg;s2.wN++;if(mm.precipTotal>s2.pMax)s2.pMax=mm.precipTotal;if(r2.humidityHigh>s2.hMax)s2.hMax=r2.humidityHigh;if(r2.humidityLow<s2.hMin)s2.hMin=r2.humidityLow});
-      HH.tMax.push(s2.tMax);HH.tMin.push(s2.tMin);HH.gMax.push(s2.gMax);HH.precip.push(s2.pMax);HH.hMax.push(s2.hMax);HH.hMin.push(s2.hMin);HH.pF.push(recs[0].metric.pressureMax);HH.pL.push(recs[recs.length-1].metric.pressureMax);HH.wMax.push(s2.wMax);HH.wAvg.push(s2.wN?s2.wS/s2.wN:0);h24n++}catch{}}
-    if(h24n){const a2=ar=>ar.reduce((x,y)=>x+y,0)/ar.length;const hT=a2(HH.tMax),lT=a2(HH.tMin),hG=a2(HH.gMax),hP=a2(HH.precip),hHx=a2(HH.hMax),hHn=a2(HH.hMin),hWm=a2(HH.wMax),hWa=a2(HH.wAvg);const pD=a2(HH.pL)-a2(HH.pF),pT=pD>2?`↗ +${pD.toFixed(1)} hPa Subiendo`:pD<-2?`↘ ${pD.toFixed(1)} hPa Bajando`:"→ Estable";
-    document.getElementById("t-ayer").innerHTML=`<div class="card"><div class="ct ct-o">Ultimas 24 horas — ${h24n} estaciones</div><div style="text-align:center;padding:12px 0"><span style="color:var(--text2)">Min</span> <b style="color:${tc(lT)};font-size:30px">${lT.toFixed(1)}°</b> <span style="margin:0 16px;color:var(--border)">|</span> <span style="color:var(--text2)">Max</span> <b style="color:${tc(hT)};font-size:30px">${hT.toFixed(1)}°</b><div style="font-size:12px;color:var(--text2);margin-top:6px">Amplitud: ${(hT-lT).toFixed(1)}°</div></div><div class="g3"><div class="m"><div class="v">${hP.toFixed(1)}<small> mm</small></div><div class="l">Precipitacion</div></div><div class="m"><div class="v">${hHn.toFixed(0)}–${hHx.toFixed(0)}%</div><div class="l">Rango humedad</div></div><div class="m"><div class="v">${hWa.toFixed(1)}<small> km/h</small></div><div class="l">Viento medio</div></div><div class="m"><div class="v">${hWm.toFixed(1)}<small> km/h</small></div><div class="l">Viento max</div></div><div class="m"><div class="v">${hG.toFixed(1)}<small> km/h</small></div><div class="l">Racha max</div></div><div class="m"><div class="v" style="font-size:13px">${pT}</div><div class="l">Presion</div></div></div></div>`}
-    else document.getElementById("t-ayer").innerHTML=`<div class="no-data">Sin datos historicos.</div>`;
+      try{const r=await fetch(`${WB}/v2/pws/history/daily?stationId=${st.id}&format=json&units=m&date=${yStr}&apiKey=${AK}&numericPrecision=decimal`);if(!r.ok||r.status===204)continue;const ob=(await r.json()).observations?.[0];if(!ob)continue;const mm=ob.metric;
+      YY.tMax.push(mm.tempHigh);YY.tMin.push(mm.tempLow);YY.tAvg.push(mm.tempAvg);YY.gMax.push(mm.windgustHigh);YY.wMax.push(mm.windspeedHigh);YY.wAvg.push(mm.windspeedAvg);YY.precip.push(mm.precipTotal);YY.hMax.push(ob.humidityHigh);YY.hMin.push(ob.humidityLow);YY.hAvg.push(ob.humidityAvg);YY.pMax.push(mm.pressureMax);YY.pMin.push(mm.pressureMin);if(ob.uvHigh!=null)YY.uvMax.push(ob.uvHigh);if(ob.solarRadiationHigh!=null)YY.srMax.push(ob.solarRadiationHigh);yN++}catch{}}
+    if(yN){const a2=ar=>ar.reduce((x,y)=>x+y,0)/ar.length;
+    const hT=a2(YY.tMax),lT=a2(YY.tMin),aT2=a2(YY.tAvg),hG=a2(YY.gMax),hP=a2(YY.precip),hHx=a2(YY.hMax),hHn=a2(YY.hMin),hHa=a2(YY.hAvg),hWm=a2(YY.wMax),hWa=a2(YY.wAvg),pMx=a2(YY.pMax),pMn=a2(YY.pMin);
+    const yUv=YY.uvMax.length?a2(YY.uvMax):null,ySr=YY.srMax.length?a2(YY.srMax):null;
+    document.getElementById("t-ayer").innerHTML=`<div class="card"><div class="ct ct-o">Ayer ${yLabel} — ${yN} estaciones</div>
+      <div style="text-align:center;padding:10px 0">
+        <div style="font-size:13px;color:var(--text2)">Temperatura media</div>
+        <div style="font-size:36px;font-weight:800;color:${tc(aT2)}">${aT2.toFixed(1)}°</div>
+        <div style="margin-top:6px"><span style="color:var(--text2)">Min</span> <b style="color:${tc(lT)};font-size:22px">${lT.toFixed(1)}°</b> <span style="margin:0 10px;color:var(--border)">·</span> <span style="color:var(--text2)">Max</span> <b style="color:${tc(hT)};font-size:22px">${hT.toFixed(1)}°</b></div>
+      </div>
+      <div class="g3">
+        <div class="m"><div class="v">${hP.toFixed(1)}<small> mm</small></div><div class="l">Precipitacion</div></div>
+        <div class="m"><div class="v">${hHa.toFixed(0)}%</div><div class="l">Humedad media</div></div>
+        <div class="m"><div class="v">${hHn.toFixed(0)}–${hHx.toFixed(0)}%</div><div class="l">Rango humedad</div></div>
+        <div class="m"><div class="v">${hWa.toFixed(1)}<small> km/h</small></div><div class="l">Viento medio</div></div>
+        <div class="m"><div class="v">${hWm.toFixed(1)}<small> km/h</small></div><div class="l">Viento max</div></div>
+        <div class="m"><div class="v">${hG.toFixed(1)}<small> km/h</small></div><div class="l">Racha max</div></div>
+        <div class="m"><div class="v">${pMn.toFixed(0)}–${pMx.toFixed(0)}</div><div class="l">Presion hPa</div></div>
+        ${yUv!=null?`<div class="m"><div class="v" style="color:${ul(yUv).c}">${yUv.toFixed(1)}</div><div class="l">UV max</div></div>`:""}
+        ${ySr!=null?`<div class="m"><div class="v">${ySr.toFixed(0)}<small> W/m²</small></div><div class="l">Radiacion max</div></div>`:""}
+      </div></div>`}
+    else document.getElementById("t-ayer").innerHTML=`<div class="no-data">Sin datos de ayer.</div>`;
 
     // TAB PREVISION
     prog(88);if(fc){const dp=fc.daypart?.[0]||{};let fH=`<div class="card"><div class="ct ct-b">Prevision 5 dias</div><div class="fcs">`;
@@ -265,7 +286,7 @@ async function go(name,lat,lon){
     document.getElementById("t-est").innerHTML=sH;
 
     const bds=L.latLngBounds();obs.forEach(({s:st,o})=>{const m2=o?.metric;
-      L.circleMarker([st.lat,st.lon],{radius:7,fillColor:tc(m2?.temp),color:"#fff",weight:1.5,fillOpacity:.9}).addTo(ML).bindPopup(`<b>${st.id}</b><br>${m2?m2.temp+"°C | "+o.humidity+"%":"Sin datos"}`).bindTooltip(st.id,{permanent:true,direction:"right",offset:[10,0],className:"map-label"});
+      L.circleMarker([st.lat,st.lon],{radius:7,fillColor:tc(m2?.temp),color:"#fff",weight:1.5,fillOpacity:.9}).addTo(ML).bindPopup(`<b>${st.id}</b><br>${m2?m2.temp+"°C | "+o.humidity+"%":"Sin datos"}`).bindTooltip(`${st.id} ${m2?m2.temp+"°":"--"}`,{permanent:true,direction:"right",offset:[10,0],className:"map-label"});
       bds.extend([st.lat,st.lon])});
     if(bds.isValid()){M._stBounds=bds}prog(100);setTimeout(hprog,500);
   }catch(e){document.getElementById("t-ahora").innerHTML=`<div class="no-data" style="color:#ef4444">Error: ${e.message}</div>`;hprog()}
