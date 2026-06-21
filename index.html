@@ -275,15 +275,19 @@ async function go(name,lat,lon){
     // Marine data: try seatemperature.info first, then Open-Meteo as fallback
     let seaTemp=null,waveH=null,waveD=null;
     try{const slug=name.normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase().replace(/\s+/g,"-").replace(/[^a-z0-9-]/g,"");
-      const stR=await fetch(`https://seatemperature.info/es/${slug}-temperatura-del-agua-del-mar.html`);
-      if(stR.ok){const stHtml=await stR.text();
-        const m3=stHtml.match(/temperatura del agua[^.]*hoy es ([0-9]+\.?[0-9]*)/);if(m3)seaTemp=parseFloat(m3[1])}}catch{}
+      const sfx=`${slug}-temperatura-del-agua-del-mar.html`;
+    let seaTempMin=null;
+      for(const base of [`https://seatemperature.info/es/${sfx}`,`https://seatemperature.info/es/espana/${sfx}`]){
+        try{const stR=await fetch(base);if(!stR.ok)continue;const stHtml=await stR.text();
+          const m3=stHtml.match(/temperatura del agua[^.]*hoy es ([0-9]+\.?[0-9]*)/);if(m3){seaTemp=parseFloat(m3[1]);
+          const m4=stHtml.match(/id=s_t>([0-9]+\.?[0-9]*)/);if(m4)seaTempMin=parseFloat(m4[1]);break}}catch{}}}catch{}
     // Open-Meteo Marine for waves (and water temp fallback)
     try{const mr=await fetch(`https://marine-api.open-meteo.com/v1/marine?latitude=${lat}&longitude=${lon}&current=sea_surface_temperature,wave_height,wave_direction&timezone=auto&forecast_days=1`);
       if(mr.ok){const mc=(await mr.json()).current;if(mc){if(seaTemp==null)seaTemp=mc.sea_surface_temperature;waveH=mc.wave_height;waveD=mc.wave_direction}}}catch{}
     if(seaTemp!=null||waveH!=null){
-      marH=`<div class="card"><div class="ct ct-c">Estado del mar</div><div class="g3">
+      marH=`<div class="card"><div class="ct ct-c">Estado del mar</div><div class="g4">
         <div class="m"><div class="v" style="color:#06b6d4">${seaTemp!=null?seaTemp+"°":"--"}</div><div class="l">Temp. agua</div></div>
+        <div class="m"><div class="v" style="color:#06b6d4">${seaTempMin!=null?seaTempMin+"°":"--"}</div><div class="l">Temp. min</div></div>
         <div class="m"><div class="v">${waveH!=null?waveH+" m":"--"}</div><div class="l">Oleaje</div></div>
         <div class="m"><div class="v">${waveD!=null?wa(waveD)+" "+wl(waveD):"--"}</div><div class="l">Dir. oleaje</div></div>
       </div></div>`}
