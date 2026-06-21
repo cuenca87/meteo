@@ -153,7 +153,7 @@ const voyager=L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager
 const positron=L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",{attribution:'&copy; <a href="https://carto.com">CARTO</a>',maxZoom:19});
 const dark=L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",{attribution:'&copy; <a href="https://carto.com">CARTO</a>',maxZoom:19});
 const pnoa=L.tileLayer("https://www.ign.es/wmts/pnoa-ma?layer=OI.OrthoimageCoverage&style=default&tilematrixset=GoogleMapsCompatible&Service=WMTS&Request=GetTile&Version=1.0.0&format=image/jpeg&TileMatrix={z}&TileRow={y}&TileCol={x}",{attribution:"PNOA &copy; IGN",maxZoom:19});
-(dk?dark:voyager).addTo(M);L.control.layers({"Voyager":voyager,"Positron":positron,"Oscuro":dark,"Satelite":pnoa}).addTo(M);ML=L.layerGroup().addTo(M)}
+voyager.addTo(M);L.control.layers({"Voyager":voyager,"Positron":positron,"Oscuro":dark,"Satelite":pnoa}).addTo(M);ML=L.layerGroup().addTo(M)}
 function showMap(v){document.getElementById("mapc").style.display=v?"block":"none";if(M&&v)setTimeout(()=>M.invalidateSize(),100)}
 
 (async()=>{try{const r=await fetch(`${IB}?request=getlist&format=json`);if(r.ok){const d=await r.json();ports=d.estaciones?.puertos||[]}}catch{}})();
@@ -170,7 +170,7 @@ function ul(u){if(u==null)return{t:"-",c:"var(--text2)"};if(u<=2)return{t:"Bajo"
 function wi(c){if(c==null)return"";const i={0:"🌪️",1:"⛈️",2:"⛈️",3:"⛈️",4:"⛈️",5:"🌨️",6:"🌧️",7:"🌨️",8:"🌧️",9:"🌧️",10:"🌧️",11:"🌧️",12:"🌧️",13:"🌨️",14:"🌨️",15:"🌨️",16:"🌨️",17:"🌧️",18:"🌧️",19:"🌫️",20:"🌫️",21:"🌫️",22:"🌫️",23:"💨",24:"💨",25:"❄️",26:"☁️",27:"🌥️",28:"🌥️",29:"⛅",30:"⛅",31:"🌙",32:"☀️",33:"🌙",34:"☀️",35:"🌧️",36:"🔥",37:"⛈️",38:"⛈️",39:"🌧️",40:"🌧️",41:"🌨️",42:"🌨️",43:"🌨️",44:"",45:"🌧️",46:"🌨️",47:"⛈️"};return i[c]||"🌡️"}
 
 const TB=["ahora","ayer","prev","mar","est"];
-function stab(id){document.querySelectorAll(".tabs button").forEach((b,i)=>b.classList.toggle("on",TB[i]===id));TB.forEach(t=>document.getElementById("t-"+t).classList.toggle("on",t===id));if(M)showMap(id==="ahora"||id==="est")}
+function stab(id){document.querySelectorAll(".tabs button").forEach((b,i)=>b.classList.toggle("on",TB[i]===id));TB.forEach(t=>document.getElementById("t-"+t).classList.toggle("on",t===id));if(M)showMap(id==="est")}
 
 function showH(di){if(!HD)return;const d0=HD.validTimeLocal[0]?.substring(0,10),dd=new Date(d0);dd.setDate(dd.getDate()+di);const tgt=dd.toISOString().substring(0,10);
 let h=`<div class="hs">`,n=0;for(let i=0;i<HD.validTimeLocal.length;i++){const dt=HD.validTimeLocal[i];if(!dt.startsWith(tgt))continue;h+=`<div class="hi2"><div class="hh">${dt.substring(11,16)}</div><div class="hic">${wi(HD.iconCode[i])}</div><div class="ht" style="color:${tc(HD.temperature[i])}">${HD.temperature[i]}°</div><div class="he">💧${HD.precipChance[i]}% 💨${HD.windSpeed[i]}</div></div>`;n++}h+=`</div>`;
@@ -189,7 +189,7 @@ async function go(name,lat,lon){
   initMap();ML.clearLayers();HD=null;
   document.getElementById("loc-name").textContent=name;
   document.getElementById("tabs").style.display="flex";
-  TB.forEach(t=>{document.getElementById("t-"+t).innerHTML=""});stab("ahora");showMap(true);
+  TB.forEach(t=>{document.getElementById("t-"+t).innerHTML=""});stab("ahora");showMap(false);
   prog(10);M.setView([lat,lon],13);
 
   try{
@@ -227,8 +227,11 @@ async function go(name,lat,lon){
     try{const ar=await fetch(`${WB}/v3/alerts/headlines?geocode=${lat},${lon}&format=json&language=es-ES&apiKey=${AK}`);
     if(ar.ok){const ad=await ar.json(),alerts=ad.alerts||[];
     const now=Date.now();const active=alerts.filter(a=>a.expireTimeUTC*1000>now);
-    if(active.length){alertHtml=active.map(a=>{const sev=a.severityCode<=2?"severe":a.severityCode<=3?"moderate":"minor";const ico=sev==="severe"?"🔴":sev==="moderate"?"🟡":"🟢";
-    return`<div class="alert-card ${sev}"><div class="alert-icon">${ico}</div><div class="alert-body"><div class="alert-title">${a.eventDescription||a.headlineText}</div><div class="alert-area">${a.areaName||""} · Hasta ${a.expireTimeLocal?.substring(11,16)||"--"}</div></div></div>`}).join("")}}}catch{}
+    const seen=new Map();active.forEach(a=>{const key=a.eventDescription||a.phenomena;if(!seen.has(key)){seen.set(key,{...a,areas:[a.areaName]})}else{seen.get(key).areas.push(a.areaName)}});
+    const unique=[...seen.values()];
+    if(unique.length){alertHtml=unique.map(a=>{const sev=a.severityCode<=2?"severe":a.severityCode<=3?"moderate":"minor";const ico=sev==="severe"?"🔴":sev==="moderate"?"🟡":"🟢";
+    const areas=[...new Set(a.areas.filter(Boolean))].join(", ");
+    return`<div class="alert-card ${sev}"><div class="alert-icon">${ico}</div><div class="alert-body"><div class="alert-title">${a.eventDescription||a.headlineText}</div><div class="alert-area">${areas} · Hasta ${a.expireTimeLocal?.substring(11,16)||"--"}</div></div></div>`}).join("")}}}catch{}
 
     // TAB AHORA
     document.getElementById("t-ahora").innerHTML=`${alertHtml}<div class="hero"><div class="hero-temp" style="color:${tc(aT)}">${aT!=null?aT.toFixed(1):"--"}°</div><div class="hero-sub" style="color:${cf.c}">${cf.t}</div><div class="hero-mm">Min <b style="color:${tc(mnT)}">${mnT!=null?mnT.toFixed(1):"--"}°</b> · Max <b style="color:${tc(mxT)}">${mxT!=null?mxT.toFixed(1):"--"}°</b></div></div>${fcB}<div class="card"><div class="g3"><div class="m"><div class="v">${aH!=null?aH.toFixed(0):"--"}%</div><div class="l">Humedad</div></div><div class="m"><div class="v">${aW!=null?aW.toFixed(1):"--"}<small> km/h</small></div><div class="l">${wa(aDir)} ${wl(aDir)} Viento</div></div><div class="m"><div class="v">${aG!=null?aG.toFixed(1):"--"}<small> km/h</small></div><div class="l">Racha max</div></div><div class="m"><div class="v">${aPr!=null?aPr.toFixed(1):"--"}<small> mm</small></div><div class="l">Precipitacion</div></div><div class="m"><div class="v">${aP!=null?aP.toFixed(1):"--"}</div><div class="l">Presion hPa</div></div><div class="m"><div class="v">${aD!=null?aD.toFixed(1):"--"}°</div><div class="l">Pto. rocio</div></div></div></div><div class="card"><div class="g3"><div class="m"><div class="v" style="color:${uv2.c}">${aUV!=null?aUV.toFixed(1):"--"}</div><div class="l">UV ${uv2.t}</div></div><div class="m"><div class="v">${aSr!=null?aSr.toFixed(0):"--"}<small> W/m²</small></div><div class="l">Radiacion</div></div><div class="m"><div class="v">${vl.length}</div><div class="l">Estaciones</div></div></div></div>`;
