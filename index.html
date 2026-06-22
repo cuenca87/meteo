@@ -60,6 +60,9 @@ header h1 small{font-weight:400;color:rgba(255,255,255,.7);font-size:11px;displa
 .ct{font-size:11px;text-transform:uppercase;letter-spacing:.6px;margin-bottom:10px;font-weight:700}
 .ct-b{color:var(--accent)}.ct-o{color:#f59e0b}.ct-c{color:#06b6d4}.ct-y{color:#eab308}
 
+.temp-chart{position:relative;width:100%;height:160px;margin-top:8px}
+.temp-chart canvas{width:100%!important;height:100%!important;border-radius:8px;background:var(--bg3)}
+
 .g2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
 .g4{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px}
@@ -165,6 +168,129 @@ function nearPort(la,lo,km){if(!ports)return null;let b=null,bd=1e9;for(const p 
 
 function prog(p){const b=document.getElementById("pbar");b.style.display="block";b.querySelector("div").style.width=Math.min(p,100)+"%"}
 function hprog(){document.getElementById("pbar").style.display="none"}
+function drawTempChart(canvasId, hourlyTemps, forecastTemps) {
+    const canvas = document.getElementById(canvasId);
+    if (!canvas) return;
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.parentElement.getBoundingClientRect();
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    const ctx = canvas.getContext("2d");
+    ctx.scale(dpr, dpr);
+    const W = rect.width, H = rect.height;
+    const pad = { t: 20, b: 28, l: 36, r: 12 };
+    const cw = W - pad.l - pad.r, ch = H - pad.t - pad.b;
+
+    const allVals = hourlyTemps.filter(v => v != null).concat((forecastTemps || []).filter(v => v != null));
+    if (!allVals.length) return;
+    const tMin = Math.floor(Math.min(...allVals) - 1), tMax = Math.ceil(Math.max(...allVals) + 1);
+    const tRange = tMax - tMin || 1;
+
+    const dk = matchMedia("(prefers-color-scheme:dark)").matches;
+    const gridColor = dk ? "rgba(255,255,255,.08)" : "rgba(0,0,0,.06)";
+    const textColor = dk ? "#94a3b8" : "#64748b";
+    const lineColor = "#3b82f6";
+    const dotColor = "#60a5fa";
+    const fillGrad = ctx.createLinearGradient(0, pad.t, 0, pad.t + ch);
+    fillGrad.addColorStop(0, dk ? "rgba(59,130,246,.25)" : "rgba(59,130,246,.15)");
+    fillGrad.addColorStop(1, dk ? "rgba(59,130,246,.02)" : "rgba(59,130,246,.02)");
+
+    ctx.font = "10px -apple-system,sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "top";
+
+    // Grid horizontal + labels hora
+    ctx.strokeStyle = gridColor;
+    ctx.lineWidth = 1;
+    for (let h = 0; h <= 24; h += 3) {
+        const x = pad.l + (h / 24) * cw;
+        ctx.beginPath(); ctx.moveTo(x, pad.t); ctx.lineTo(x, pad.t + ch); ctx.stroke();
+        ctx.fillStyle = textColor;
+        ctx.fillText(h + "h", x, pad.t + ch + 4);
+    }
+
+    // Grid vertical + labels temp
+    ctx.textAlign = "right";
+    ctx.textBaseline = "middle";
+    const step = tRange <= 6 ? 1 : tRange <= 15 ? 2 : 5;
+    for (let t = Math.ceil(tMin / step) * step; t <= tMax; t += step) {
+        const y = pad.t + ch - ((t - tMin) / tRange) * ch;
+        ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(pad.l + cw, y); ctx.stroke();
+        ctx.fillStyle = textColor;
+        ctx.fillText(t + "°", pad.l - 4, y);
+    }
+
+    // Línea + relleno
+    const points = [];
+    for (let h = 0; h < 24; h++) {
+        if (hourlyTemps[h] != null) {
+            const x = pad.l + ((h + 0.5) / 24) * cw;
+            const y = pad.t + ch - ((hourlyTemps[h] - tMin) / tRange) * ch;
+            points.push({ x, y, t: hourlyTemps[h] });
+        }
+    }
+    if (points.length >= 2) {
+        ctx.beginPath();
+        ctx.moveTo(points[0].x, pad.t + ch);
+        points.forEach(p => ctx.lineTo(p.x, p.y));
+        ctx.lineTo(points[points.length - 1].x, pad.t + ch);
+        ctx.closePath();
+        ctx.fillStyle = fillGrad;
+        ctx.fill();
+
+        ctx.beginPath();
+        ctx.moveTo(points[0].x, points[0].y);
+        for (let i = 1; i < points.length; i++) ctx.lineTo(points[i].x, points[i].y);
+        ctx.strokeStyle = lineColor;
+        ctx.lineWidth = 2;
+        ctx.lineJoin = "round";
+        ctx.stroke();
+    }
+
+    // Puntos + valor
+    ctx.textAlign = "center";
+    ctx.textBaseline = "bottom";
+    points.forEach((p, i) => {
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 3, 0, Math.PI * 2);
+        ctx.fillStyle = dotColor;
+        ctx.fill();
+        if (i % 2 === 0 || points.length <= 12) {
+            ctx.fillStyle = textColor;
+            ctx.font = "9px -apple-system,sans-serif";
+            ctx.fillText(p.t.toFixed(1) + "°", p.x, p.y - 6);
+        }
+    });
+
+    // Forecast overlay (dashed orange line)
+    if (forecastTemps && forecastTemps.some(v => v != null)) {
+        const fcPoints = [];
+        for (let h = 0; h < 24; h++) {
+            if (forecastTemps[h] != null) {
+                const x = pad.l + ((h + 0.5) / 24) * cw;
+                const y = pad.t + ch - ((forecastTemps[h] - tMin) / tRange) * ch;
+                fcPoints.push({ x, y, t: forecastTemps[h] });
+            }
+        }
+        if (fcPoints.length >= 2) {
+            ctx.beginPath();
+            ctx.moveTo(fcPoints[0].x, fcPoints[0].y);
+            for (let i = 1; i < fcPoints.length; i++) ctx.lineTo(fcPoints[i].x, fcPoints[i].y);
+            ctx.strokeStyle = "#f59e0b";
+            ctx.lineWidth = 2;
+            ctx.setLineDash([6, 4]);
+            ctx.stroke();
+            ctx.setLineDash([]);
+        }
+        fcPoints.forEach(p => {
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, 2.5, 0, Math.PI * 2);
+            ctx.fillStyle = "#f59e0b";
+            ctx.fill();
+        });
+    }
+}
+
 function tc(t){if(t==null)return"var(--text2)";if(t<=0)return"#3b82f6";if(t<=10)return"#06b6d4";if(t<=20)return"#22c55e";if(t<=30)return"#f59e0b";if(t<=35)return"#ef4444";return"#dc2626"}
 function wa(d){return d==null?"":`<span style="display:inline-block;transform:rotate(${d}deg);color:var(--accent)">↓</span>`}
 function wl(d){if(d==null)return"-";return["N","NNE","NE","ENE","E","ESE","SE","SSE","S","SSO","SO","OSO","O","ONO","NO","NNO"][Math.round(d/22.5)%16]}
@@ -218,7 +344,9 @@ async function loadForecast(src){
 function buildSrcSel(cur){return`<div class="src-sel"><button class="src-btn ${cur==="wc"?"on":""}" data-src="wc">Weather Co.</button><button class="src-btn ${cur==="om"?"on":""}" data-src="om">Open-Meteo</button></div>`}
 
 const TB=["ahora","ayer","prev","mar","est"];
-function stab(id){document.querySelectorAll(".tabs button").forEach((b,i)=>b.classList.toggle("on",TB[i]===id));TB.forEach(t=>document.getElementById("t-"+t).classList.toggle("on",t===id));if(M){showMap(id==="est");if(id==="est"&&M._stBounds)setTimeout(()=>M.fitBounds(M._stBounds.pad(.15)),150)}}
+function stab(id){document.querySelectorAll(".tabs button").forEach((b,i)=>b.classList.toggle("on",TB[i]===id));TB.forEach(t=>document.getElementById("t-"+t).classList.toggle("on",t===id));if(M){showMap(id==="est");if(id==="est"&&M._stBounds)setTimeout(()=>M.fitBounds(M._stBounds.pad(.15)),150)}
+if(id==="ayer"&&window._yHourly)setTimeout(()=>drawTempChart("chart-yesterday",window._yHourly),100);
+if(id==="ahora"&&window._todayHourly)setTimeout(()=>drawTempChart("chart-today",window._todayHourly,window._todayForecast),100)}
 
 function showH(di){if(!HD)return;const d0=HD.validTimeLocal[0]?.substring(0,10),dd=new Date(d0);dd.setDate(dd.getDate()+di);const tgt=dd.toISOString().substring(0,10);
 let h=`<div class="hs">`,n=0;for(let i=0;i<HD.validTimeLocal.length;i++){const dt=HD.validTimeLocal[i];if(!dt.startsWith(tgt))continue;
@@ -310,8 +438,46 @@ async function go(name,lat,lon){
     const areas=[...new Set(a.areas.filter(Boolean))].join(", ");
     return`<div class="alert-card ${sev}"><div class="alert-icon">${ico}</div><div class="alert-body"><div class="alert-title">${a.eventDescription||a.headlineText}</div><div class="alert-area">${areas} · Hasta ${a.expireTimeLocal?.substring(11,16)||"--"}</div></div></div>`}).join("")}}}catch{}
 
+    // Hourly temp chart for today (from all/1day endpoint)
+    const todayHourly = new Array(24).fill(null);
+    const todayHourlyCounts = new Array(24).fill(0);
+    for (let i = 0; i < vl.length; i++) {
+        try {
+            const r = await fetch(`${WB}/v2/pws/observations/all/1day?stationId=${vl[i].s.id}&format=json&units=m&apiKey=${AK}&numericPrecision=decimal`);
+            if (!r.ok || r.status === 204) continue;
+            const recs = (await r.json()).observations || [];
+            recs.forEach(rec => {
+                const h = parseInt(rec.obsTimeLocal.substring(11, 13));
+                if (h >= 0 && h < 24 && rec.metric.tempAvg != null) {
+                    todayHourly[h] = (todayHourly[h] || 0) + rec.metric.tempAvg;
+                    todayHourlyCounts[h]++;
+                }
+            });
+        } catch {}
+    }
+    for (let h = 0; h < 24; h++) { if (todayHourlyCounts[h]) todayHourly[h] /= todayHourlyCounts[h]; }
+
+    // Forecast hourly for today overlay
+    const todayForecast = new Array(24).fill(null);
+    try {
+        const hfr = await fetch(`${WB}/v3/wx/forecast/hourly/2day?apiKey=${AK}&geocode=${lat},${lon}&units=m&language=es-ES&format=json`);
+        if (hfr.ok) {
+            const hfd = await hfr.json();
+            const todayStr = new Date().toISOString().slice(0, 10);
+            for (let i = 0; i < hfd.validTimeLocal.length; i++) {
+                if (hfd.validTimeLocal[i].startsWith(todayStr)) {
+                    const h = parseInt(hfd.validTimeLocal[i].substring(11, 13));
+                    if (h >= 0 && h < 24) todayForecast[h] = hfd.temperature[i];
+                }
+            }
+        }
+    } catch {}
+
     // TAB AHORA
-    document.getElementById("t-ahora").innerHTML=`${alertHtml}<div class="hero"><div class="hero-temp" style="color:${tc(aT)}">${aT!=null?aT.toFixed(1):"--"}°</div><div class="hero-sub" style="color:${cf.c}">${cf.t}</div><div class="hero-mm">Min <b style="color:${tc(mnT)}">${mnT!=null?mnT.toFixed(1):"--"}°</b> · Max <b style="color:${tc(mxT)}">${mxT!=null?mxT.toFixed(1):"--"}°</b></div></div>${fcB}<div class="card"><div class="g3"><div class="m"><div class="v">${aH!=null?aH.toFixed(0):"--"}%</div><div class="l">Humedad</div></div><div class="m"><div class="v">${aW!=null?aW.toFixed(1):"--"}<small> km/h</small></div><div class="l">${wa(aDir)} ${wl(aDir)} Viento</div></div><div class="m"><div class="v">${aG!=null?aG.toFixed(1):"--"}<small> km/h</small></div><div class="l">Racha max</div></div><div class="m"><div class="v">${aPr!=null?aPr.toFixed(1):"--"}<small> mm</small></div><div class="l">Precipitacion</div></div><div class="m"><div class="v">${aP!=null?aP.toFixed(1):"--"}</div><div class="l">Presion hPa</div></div><div class="m"><div class="v">${aD!=null?aD.toFixed(1):"--"}°</div><div class="l">Pto. rocio</div></div></div></div><div class="card"><div class="g3"><div class="m"><div class="v" style="color:${uv2.c}">${aUV!=null?aUV.toFixed(1):"--"}</div><div class="l">UV ${uv2.t}</div></div><div class="m"><div class="v">${aSr!=null?aSr.toFixed(0):"--"}<small> W/m²</small></div><div class="l">Radiacion</div></div><div class="m"><div class="v">${vl.length}</div><div class="l">Estaciones</div></div></div></div>`;
+    document.getElementById("t-ahora").innerHTML=`${alertHtml}<div class="hero"><div class="hero-temp" style="color:${tc(aT)}">${aT!=null?aT.toFixed(1):"--"}°</div><div class="hero-sub" style="color:${cf.c}">${cf.t}</div><div class="hero-mm">Min <b style="color:${tc(mnT)}">${mnT!=null?mnT.toFixed(1):"--"}°</b> · Max <b style="color:${tc(mxT)}">${mxT!=null?mxT.toFixed(1):"--"}°</b></div></div>${fcB}<div class="card"><div class="ct ct-b">Temperatura hoy por horas</div><div style="display:flex;gap:14px;font-size:10px;color:var(--text2);margin-bottom:6px"><span><span style="color:#3b82f6">━</span> Observado</span><span><span style="color:#f59e0b">╌</span> Prevision</span></div><div class="temp-chart"><canvas id="chart-today"></canvas></div></div><div class="card"><div class="g3"><div class="m"><div class="v">${aH!=null?aH.toFixed(0):"--"}%</div><div class="l">Humedad</div></div><div class="m"><div class="v">${aW!=null?aW.toFixed(1):"--"}<small> km/h</small></div><div class="l">${wa(aDir)} ${wl(aDir)} Viento</div></div><div class="m"><div class="v">${aG!=null?aG.toFixed(1):"--"}<small> km/h</small></div><div class="l">Racha max</div></div><div class="m"><div class="v">${aPr!=null?aPr.toFixed(1):"--"}<small> mm</small></div><div class="l">Precipitacion</div></div><div class="m"><div class="v">${aP!=null?aP.toFixed(1):"--"}</div><div class="l">Presion hPa</div></div><div class="m"><div class="v">${aD!=null?aD.toFixed(1):"--"}°</div><div class="l">Pto. rocio</div></div></div></div><div class="card"><div class="g3"><div class="m"><div class="v" style="color:${uv2.c}">${aUV!=null?aUV.toFixed(1):"--"}</div><div class="l">UV ${uv2.t}</div></div><div class="m"><div class="v">${aSr!=null?aSr.toFixed(0):"--"}<small> W/m²</small></div><div class="l">Radiacion</div></div><div class="m"><div class="v">${vl.length}</div><div class="l">Estaciones</div></div></div></div>`;
+    window._todayHourly = todayHourly;
+    window._todayForecast = todayForecast;
+    setTimeout(() => drawTempChart("chart-today", todayHourly, todayForecast), 100);
 
     // TAB LUNA/MAREAS
     document.getElementById("t-mar").innerHTML=(soH||tH||marH)?`${soH}${marH}${tH}`:`<div class="no-data">No hay informacion de mareas para este municipio (no es costero).</div>`;
@@ -330,6 +496,25 @@ async function go(name,lat,lon){
     const yN=yFilt.length;
     const YY={tMax:[],tMin:[],tAvg:[],gMax:[],precip:[],hMax:[],hMin:[],hAvg:[],wMax:[],wAvg:[],pMax:[],pMin:[],uvMax:[],srMax:[]};
     yFilt.forEach(ob=>{const mm=ob.metric;YY.tMax.push(mm.tempHigh);YY.tMin.push(mm.tempLow);YY.tAvg.push(mm.tempAvg);YY.gMax.push(mm.windgustHigh);YY.wMax.push(mm.windspeedHigh);YY.wAvg.push(mm.windspeedAvg);YY.precip.push(mm.precipTotal);YY.hMax.push(ob.humidityHigh);YY.hMin.push(ob.humidityLow);YY.hAvg.push(ob.humidityAvg);YY.pMax.push(mm.pressureMax);YY.pMin.push(mm.pressureMin);if(ob.uvHigh!=null)YY.uvMax.push(ob.uvHigh);if(ob.solarRadiationHigh!=null)YY.srMax.push(ob.solarRadiationHigh)});
+    // Hourly temp chart for yesterday
+    const yHourly = new Array(24).fill(null);
+    const yHCounts = new Array(24).fill(0);
+    for (let i = 0; i < vl.length; i++) {
+        try {
+            const r = await fetch(`${WB}/v2/pws/history/hourly?stationId=${vl[i].s.id}&format=json&units=m&date=${yStr}&apiKey=${AK}&numericPrecision=decimal`);
+            if (!r.ok || r.status === 204) continue;
+            const recs = (await r.json()).observations || [];
+            recs.forEach(rec => {
+                const h = parseInt(rec.obsTimeLocal.substring(11, 13));
+                if (h >= 0 && h < 24 && rec.metric?.tempAvg != null) {
+                    yHourly[h] = (yHourly[h] || 0) + rec.metric.tempAvg;
+                    yHCounts[h]++;
+                }
+            });
+        } catch {}
+    }
+    for (let h = 0; h < 24; h++) { if (yHCounts[h]) yHourly[h] /= yHCounts[h]; }
+
     if(yN){const a2=ar=>ar.reduce((x,y)=>x+y,0)/ar.length;
     const hT=a2(YY.tMax),lT=a2(YY.tMin),aT2=a2(YY.tAvg),hG=a2(YY.gMax),hP=a2(YY.precip),hHx=a2(YY.hMax),hHn=a2(YY.hMin),hHa=a2(YY.hAvg),hWm=a2(YY.wMax),hWa=a2(YY.wAvg),pMx=a2(YY.pMax),pMn=a2(YY.pMin);
     const yUv=YY.uvMax.length?a2(YY.uvMax):null,ySr=YY.srMax.length?a2(YY.srMax):null;
@@ -339,7 +524,8 @@ async function go(name,lat,lon){
         <div style="font-size:36px;font-weight:800;color:${tc(aT2)}">${aT2.toFixed(1)}°</div>
         <div style="margin-top:6px"><span style="color:var(--text2)">Min</span> <b style="color:${tc(lT)};font-size:22px">${lT.toFixed(1)}°</b> <span style="margin:0 10px;color:var(--border)">·</span> <span style="color:var(--text2)">Max</span> <b style="color:${tc(hT)};font-size:22px">${hT.toFixed(1)}°</b></div>
       </div>
-      <div class="g3">
+      <div class="temp-chart"><canvas id="chart-yesterday"></canvas></div>
+      <div class="g3" style="margin-top:12px">
         <div class="m"><div class="v">${hP.toFixed(1)}<small> mm</small></div><div class="l">Precipitacion</div></div>
         <div class="m"><div class="v">${hHa.toFixed(0)}%</div><div class="l">Humedad media</div></div>
         <div class="m"><div class="v">${hHn.toFixed(0)}–${hHx.toFixed(0)}%</div><div class="l">Rango humedad</div></div>
@@ -349,7 +535,8 @@ async function go(name,lat,lon){
         <div class="m"><div class="v">${pMn.toFixed(0)}–${pMx.toFixed(0)}</div><div class="l">Presion hPa</div></div>
         ${yUv!=null?`<div class="m"><div class="v" style="color:${ul(yUv).c}">${yUv.toFixed(1)}</div><div class="l">UV max</div></div>`:""}
         ${ySr!=null?`<div class="m"><div class="v">${ySr.toFixed(0)}<small> W/m²</small></div><div class="l">Radiacion max</div></div>`:""}
-      </div></div>`}
+      </div></div>`;
+    window._yHourly = yHourly}
     else document.getElementById("t-ayer").innerHTML=`<div class="no-data">Sin datos de ayer.</div>`;
 
     // TAB PREVISION
