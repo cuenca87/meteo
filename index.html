@@ -291,6 +291,56 @@ function drawTempChart(canvasId, hourlyTemps, forecastTemps) {
     }
 }
 
+async function loadTodayChart() {
+    const btn = document.getElementById("btn-chart-today");
+    btn.textContent = "Cargando datos...";
+    btn.disabled = true;
+    try {
+        const vl = window._chartStations, lat = window._chartLat, lon = window._chartLon;
+        if (!vl || !vl.length) { btn.textContent = "Sin estaciones"; return; }
+        const todayHourly = new Array(24).fill(null);
+        const counts = new Array(24).fill(0);
+        const tStr = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+        btn.textContent = `Cargando estaciones...`;
+        for (let i = 0; i < vl.length; i++) {
+            try {
+                const r = await fetch(`${WB}/v2/pws/history/hourly?stationId=${vl[i].s.id}&format=json&units=m&date=${tStr}&apiKey=${AK}&numericPrecision=decimal`);
+                if (!r.ok || r.status === 204) continue;
+                const recs = (await r.json()).observations || [];
+                recs.forEach(rec => {
+                    const h = parseInt(rec.obsTimeLocal.substring(11, 13));
+                    if (h >= 0 && h < 24 && rec.metric?.tempAvg != null) {
+                        todayHourly[h] = (todayHourly[h] || 0) + rec.metric.tempAvg;
+                        counts[h]++;
+                    }
+                });
+            } catch {}
+        }
+        for (let h = 0; h < 24; h++) { if (counts[h]) todayHourly[h] /= counts[h]; }
+
+        const todayForecast = new Array(24).fill(null);
+        try {
+            const hfr = await fetch(`${WB}/v3/wx/forecast/hourly/2day?apiKey=${AK}&geocode=${lat},${lon}&units=m&language=es-ES&format=json`);
+            if (hfr.ok) {
+                const hfd = await hfr.json();
+                const todayStr = new Date().toISOString().slice(0, 10);
+                for (let i = 0; i < hfd.validTimeLocal.length; i++) {
+                    if (hfd.validTimeLocal[i].startsWith(todayStr)) {
+                        const h = parseInt(hfd.validTimeLocal[i].substring(11, 13));
+                        if (h >= 0 && h < 24) todayForecast[h] = hfd.temperature[i];
+                    }
+                }
+            }
+        } catch {}
+
+        window._todayHourly = todayHourly;
+        window._todayForecast = todayForecast;
+        btn.style.display = "none";
+        document.getElementById("chart-today-wrap").style.display = "block";
+        setTimeout(() => drawTempChart("chart-today", todayHourly, todayForecast), 100);
+    } catch (e) { btn.textContent = "Error: " + e.message; btn.disabled = false; }
+}
+
 function tc(t){if(t==null)return"var(--text2)";if(t<=0)return"#3b82f6";if(t<=10)return"#06b6d4";if(t<=20)return"#22c55e";if(t<=30)return"#f59e0b";if(t<=35)return"#ef4444";return"#dc2626"}
 function wa(d){return d==null?"":`<span style="display:inline-block;transform:rotate(${d}deg);color:var(--accent)">↓</span>`}
 function wl(d){if(d==null)return"-";return["N","NNE","NE","ENE","E","ESE","SE","SSE","S","SSO","SO","OSO","O","ONO","NO","NNO"][Math.round(d/22.5)%16]}
@@ -438,46 +488,16 @@ async function go(name,lat,lon){
     const areas=[...new Set(a.areas.filter(Boolean))].join(", ");
     return`<div class="alert-card ${sev}"><div class="alert-icon">${ico}</div><div class="alert-body"><div class="alert-title">${a.eventDescription||a.headlineText}</div><div class="alert-area">${areas} · Hasta ${a.expireTimeLocal?.substring(11,16)||"--"}</div></div></div>`}).join("")}}}catch{}
 
-    // Hourly temp chart for today (from all/1day endpoint)
     const todayHourly = new Array(24).fill(null);
-    const todayHourlyCounts = new Array(24).fill(0);
-    for (let i = 0; i < vl.length; i++) {
-        try {
-            const r = await fetch(`${WB}/v2/pws/observations/all/1day?stationId=${vl[i].s.id}&format=json&units=m&apiKey=${AK}&numericPrecision=decimal`);
-            if (!r.ok || r.status === 204) continue;
-            const recs = (await r.json()).observations || [];
-            recs.forEach(rec => {
-                const h = parseInt(rec.obsTimeLocal.substring(11, 13));
-                if (h >= 0 && h < 24 && rec.metric.tempAvg != null) {
-                    todayHourly[h] = (todayHourly[h] || 0) + rec.metric.tempAvg;
-                    todayHourlyCounts[h]++;
-                }
-            });
-        } catch {}
-    }
-    for (let h = 0; h < 24; h++) { if (todayHourlyCounts[h]) todayHourly[h] /= todayHourlyCounts[h]; }
-
-    // Forecast hourly for today overlay
     const todayForecast = new Array(24).fill(null);
-    try {
-        const hfr = await fetch(`${WB}/v3/wx/forecast/hourly/2day?apiKey=${AK}&geocode=${lat},${lon}&units=m&language=es-ES&format=json`);
-        if (hfr.ok) {
-            const hfd = await hfr.json();
-            const todayStr = new Date().toISOString().slice(0, 10);
-            for (let i = 0; i < hfd.validTimeLocal.length; i++) {
-                if (hfd.validTimeLocal[i].startsWith(todayStr)) {
-                    const h = parseInt(hfd.validTimeLocal[i].substring(11, 13));
-                    if (h >= 0 && h < 24) todayForecast[h] = hfd.temperature[i];
-                }
-            }
-        }
-    } catch {}
 
     // TAB AHORA
-    document.getElementById("t-ahora").innerHTML=`${alertHtml}<div class="hero"><div class="hero-temp" style="color:${tc(aT)}">${aT!=null?aT.toFixed(1):"--"}°</div><div class="hero-sub" style="color:${cf.c}">${cf.t}</div><div class="hero-mm">Min <b style="color:${tc(mnT)}">${mnT!=null?mnT.toFixed(1):"--"}°</b> · Max <b style="color:${tc(mxT)}">${mxT!=null?mxT.toFixed(1):"--"}°</b></div></div>${fcB}<div class="card"><div class="ct ct-b">Temperatura hoy por horas</div><div style="display:flex;gap:14px;font-size:10px;color:var(--text2);margin-bottom:6px"><span><span style="color:#3b82f6">━</span> Observado</span><span><span style="color:#f59e0b">╌</span> Prevision</span></div><div class="temp-chart"><canvas id="chart-today"></canvas></div></div><div class="card"><div class="g3"><div class="m"><div class="v">${aH!=null?aH.toFixed(0):"--"}%</div><div class="l">Humedad</div></div><div class="m"><div class="v">${aW!=null?aW.toFixed(1):"--"}<small> km/h</small></div><div class="l">${wa(aDir)} ${wl(aDir)} Viento</div></div><div class="m"><div class="v">${aG!=null?aG.toFixed(1):"--"}<small> km/h</small></div><div class="l">Racha max</div></div><div class="m"><div class="v">${aPr!=null?aPr.toFixed(1):"--"}<small> mm</small></div><div class="l">Precipitacion</div></div><div class="m"><div class="v">${aP!=null?aP.toFixed(1):"--"}</div><div class="l">Presion hPa</div></div><div class="m"><div class="v">${aD!=null?aD.toFixed(1):"--"}°</div><div class="l">Pto. rocio</div></div></div></div><div class="card"><div class="g3"><div class="m"><div class="v" style="color:${uv2.c}">${aUV!=null?aUV.toFixed(1):"--"}</div><div class="l">UV ${uv2.t}</div></div><div class="m"><div class="v">${aSr!=null?aSr.toFixed(0):"--"}<small> W/m²</small></div><div class="l">Radiacion</div></div><div class="m"><div class="v">${vl.length}</div><div class="l">Estaciones</div></div></div></div>`;
+    document.getElementById("t-ahora").innerHTML=`${alertHtml}<div class="hero"><div class="hero-temp" style="color:${tc(aT)}">${aT!=null?aT.toFixed(1):"--"}°</div><div class="hero-sub" style="color:${cf.c}">${cf.t}</div><div class="hero-mm">Min <b style="color:${tc(mnT)}">${mnT!=null?mnT.toFixed(1):"--"}°</b> · Max <b style="color:${tc(mxT)}">${mxT!=null?mxT.toFixed(1):"--"}°</b></div></div>${fcB}<div class="card"><div class="ct ct-b">Temperatura hoy por horas</div><button onclick="loadTodayChart()" id="btn-chart-today" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--bg2);color:var(--accent);cursor:pointer;font-size:13px;font-weight:600">Cargar gráfica</button><div id="chart-today-wrap" style="display:none"><div style="display:flex;gap:14px;font-size:10px;color:var(--text2);margin-bottom:6px"><span><span style="color:#3b82f6">━</span> Observado</span><span><span style="color:#f59e0b">╌</span> Previsión</span></div><div class="temp-chart"><canvas id="chart-today"></canvas></div></div></div><div class="card"><div class="g3"><div class="m"><div class="v">${aH!=null?aH.toFixed(0):"--"}%</div><div class="l">Humedad</div></div><div class="m"><div class="v">${aW!=null?aW.toFixed(1):"--"}<small> km/h</small></div><div class="l">${wa(aDir)} ${wl(aDir)} Viento</div></div><div class="m"><div class="v">${aG!=null?aG.toFixed(1):"--"}<small> km/h</small></div><div class="l">Racha max</div></div><div class="m"><div class="v">${aPr!=null?aPr.toFixed(1):"--"}<small> mm</small></div><div class="l">Precipitacion</div></div><div class="m"><div class="v">${aP!=null?aP.toFixed(1):"--"}</div><div class="l">Presion hPa</div></div><div class="m"><div class="v">${aD!=null?aD.toFixed(1):"--"}°</div><div class="l">Pto. rocio</div></div></div></div><div class="card"><div class="g3"><div class="m"><div class="v" style="color:${uv2.c}">${aUV!=null?aUV.toFixed(1):"--"}</div><div class="l">UV ${uv2.t}</div></div><div class="m"><div class="v">${aSr!=null?aSr.toFixed(0):"--"}<small> W/m²</small></div><div class="l">Radiacion</div></div><div class="m"><div class="v">${vl.length}</div><div class="l">Estaciones</div></div></div></div>`;
     window._todayHourly = todayHourly;
     window._todayForecast = todayForecast;
-    setTimeout(() => drawTempChart("chart-today", todayHourly, todayForecast), 100);
+    window._chartStations = vl;
+    window._chartLat = lat;
+    window._chartLon = lon;
 
     // TAB LUNA/MAREAS
     document.getElementById("t-mar").innerHTML=(soH||tH||marH)?`${soH}${marH}${tH}`:`<div class="no-data">No hay informacion de mareas para este municipio (no es costero).</div>`;
