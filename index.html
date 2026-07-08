@@ -405,19 +405,27 @@ async function loadForecast(src){
     // Forzar reflow síncrono: sin esto, el navegador no ha calculado las
     // dimensiones del div cuando L.map() lo mide, y Leaflet centra en 0×0.
     // Leer offsetWidth obliga al browser a recalcular el layout antes de continuar.
-    void document.getElementById('radar-map').offsetWidth;
-    {
+    // Crear el mapa con un pequeño delay para que el browser calcule el layout
+    setTimeout(()=>{
+      if(!document.getElementById('radar-map'))return;
       const dk=matchMedia('(prefers-color-scheme:dark)').matches;
       _rm=L.map('radar-map',{zoomControl:false,attributionControl:false,maxZoom:18});
-      L.tileLayer(dk?'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png':'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',{maxZoom:19}).addTo(_rm);
+      // OpenStreetMap como base (más fiable que CartoCDN en PWAs)
+      L.tileLayer(dk
+        ?'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
+        :'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+        {maxZoom:19,subdomains:'abc'}).addTo(_rm);
       L.control.zoom({position:'topright'}).addTo(_rm);
       const lg=L.control({position:'bottomleft'});
       lg.onAdd=()=>{const d=L.DomUtil.create('div');d.style.cssText='background:rgba(0,0,0,.55);color:#fff;font-size:10px;padding:4px 7px;border-radius:6px;line-height:1.5';d.innerHTML='<span style="color:#00e5ff">■</span> ligera &nbsp;<span style="color:#00ff00">■</span> mod. &nbsp;<span style="color:#ffff00">■</span> fuerte &nbsp;<span style="color:#ff0000">■</span> intensa';return d};
       lg.addTo(_rm);
       _rm.invalidateSize();
       _rm.setView([lat,lon],7);
-    }
-    _rInit(lat,lon); // solo descarga datos y añade tiles al mapa ya creado
+      // Marcador de depuración: confirma que las coordenadas son correctas
+      L.circleMarker([lat,lon],{radius:8,color:'#ef4444',fillColor:'#ef4444',fillOpacity:.9,weight:2}).addTo(_rm);
+      _rInit(lat,lon);
+    },300);
+
   }catch(e){tab.innerHTML=(hdr||buildSrcSel(src))+`<div class="no-data" style="color:#ef4444">Error: ${e.message}</div>`;tab.querySelectorAll(".src-btn").forEach(b=>b.addEventListener("click",()=>loadForecast(b.dataset.src)))}
 }
 function buildSrcSel(cur){return`<div class="src-sel"><button class="src-btn ${cur==="wc"?"on":""}" data-src="wc">Weather Co.</button><button class="src-btn ${cur==="om"?"on":""}" data-src="om">Open-Meteo</button></div>`}
@@ -474,7 +482,7 @@ function _rShow(i){
   _ri=((i%_rf.length)+_rf.length)%_rf.length;
   if(_rl)try{_rm.removeLayer(_rl)}catch(_e){}
   _rl=L.tileLayer('https://tilecache.rainviewer.com'+_rf[_ri].path+'/256/{z}/{x}/{y}/6/1_1.png',
-    {opacity:.75,maxZoom:18,maxNativeZoom:10,zIndex:10}).addTo(_rm);
+    {opacity:.75,zIndex:10}).addTo(_rm);
   const ts=new Date(_rf[_ri].time*1000);
   const hasNowcast=(_rd?.radar?.nowcast?.length>0);
   const mins=Math.round((_rf[_ri].time-_rf[0].time)/60);
