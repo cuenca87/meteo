@@ -439,13 +439,23 @@ async function _rInit(lat,lon){
   try{
     const res=await fetch('https://api.rainviewer.com/public/weather-maps.json');
     _rd=await res.json();
-    _rf=[...(_rd.radar.past||[]),...(_rd.radar.nowcast||[])];
-    // Verificar que el contenedor sigue en el DOM tras el fetch async
+    // Solo frames desde el instante actual en adelante (nowcast). Si no hay nowcast,
+    // usamos todos los frames del pasado para mostrar la trayectoria de la lluvia.
+    const past=_rd.radar.past||[];
+    const nowcast=_rd.radar.nowcast||[];
+    if(nowcast.length){
+      // Incluimos el último frame del pasado (instante actual) + todos los nowcast
+      _rf=[past[past.length-1],...nowcast].filter(Boolean);
+    }else{
+      // Sin nowcast: mostramos todos los frames pasados (la dirección de la lluvia)
+      _rf=[...past];
+    }
     if(!document.getElementById('radar-map'))return;
     if(!_rf.length){document.getElementById('radar-map').innerHTML='<div class="no-data">Sin datos de radar disponibles</div>';return}
     _rm=L.map('radar-map',{zoomControl:false,attributionControl:false,maxZoom:18}).setView([lat,lon],7);
-    // invalidateSize tras render para que Leaflet conozca el tamaño real del contenedor
-    setTimeout(()=>_rm&&_rm.invalidateSize(),200);
+    // Tras el primer render, ajustar tamaño Y re-centrar (el contenedor puede no tener
+    // dimensiones definitivas en el momento de la creación del mapa)
+    setTimeout(()=>{if(_rm){_rm.invalidateSize();_rm.setView([lat,lon],7)}},300);
     const dk=matchMedia('(prefers-color-scheme:dark)').matches;
     L.tileLayer(dk
       ?'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
@@ -455,8 +465,7 @@ async function _rInit(lat,lon){
     const leg=L.control({position:'bottomleft'});
     leg.onAdd=()=>{const d=L.DomUtil.create('div');d.style.cssText='background:rgba(0,0,0,.55);color:#fff;font-size:10px;padding:4px 7px;border-radius:6px;line-height:1.5';d.innerHTML='<span style="color:#00e5ff">■</span> ligera &nbsp;<span style="color:#00ff00">■</span> mod. &nbsp;<span style="color:#ffff00">■</span> fuerte &nbsp;<span style="color:#ff0000">■</span> intensa';return d};
     leg.addTo(_rm);
-    const pastN=_rd.radar.past?.length||0;
-    _rShow(Math.max(0,pastN-1));  // arrancar en el instante actual
+    _rShow(0);  // empieza siempre en el primer frame (instante actual o más antiguo disponible)
     _rPlay();
   }catch(e){
     const t=document.getElementById('radar-time');
@@ -470,25 +479,15 @@ function _rShow(i){
   _rl=L.tileLayer('https://tilecache.rainviewer.com'+_rf[_ri].path+'/256/{z}/{x}/{y}/6/1_1.png',
     {opacity:.75,maxZoom:18,maxNativeZoom:10,zIndex:10}).addTo(_rm);
   const ts=new Date(_rf[_ri].time*1000);
-  const pastN=_rd?.radar?.past?.length||0;
-  const isNow=_ri>=pastN;
+  const nowcastStart=(_rd?.radar?.nowcast?.length&&_rd.radar.past?.length)?1:0;
+  const isNow=_ri>=nowcastStart;
   const tEl=document.getElementById('radar-time');
   if(tEl)tEl.innerHTML=`<b>${ts.toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'})}</b><br><span style="font-size:9px">${isNow?'nowcast':'radar'}</span>`;
   const pct=_rf.length>1?(_ri/(_rf.length-1))*100:0;
   const th=document.getElementById('radar-thumb');if(th)th.style.left=pct+'%';
-  const dv=document.getElementById('radar-div');
-  if(dv&&_rf.length>1)dv.style.left=((pastN-0.5)/(_rf.length-1)*100)+'%';
 }
 
-function _rPlay(){
-  _rp=true;const b=document.getElementById('radar-play');if(b)b.textContent='⏸';
-  const pastN=_rd?.radar?.past?.length||0;
-  _rt=setInterval(()=>{
-    const next=_ri+1;
-    // Al llegar al final del nowcast, volver al instante presente (no al pasado)
-    _rShow(next>=_rf.length?Math.max(0,pastN-1):next);
-  },650);
-}
+function _rPlay(){_rp=true;const b=document.getElementById('radar-play');if(b)b.textContent='⏸';_rt=setInterval(()=>_rShow(_ri+1),700)}
 function _rStop(){_rp=false;const b=document.getElementById('radar-play');if(b)b.textContent='▶';clearInterval(_rt)}
 function radarToggle(){_rp?_rStop():_rPlay()}
 function radarSeek(e){const r=e.currentTarget.getBoundingClientRect();const p=Math.max(0,Math.min(1,(e.clientX-r.left)/r.width));_rStop();_rShow(Math.round(p*(_rf.length-1)))}
