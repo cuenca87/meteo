@@ -427,7 +427,7 @@ function switchRain(btn,product){
   document.querySelectorAll('.rain-tab').forEach(b=>{b.style.color='var(--text2)';b.style.borderBottomColor='transparent';b.style.fontWeight='500'});
   btn.style.color='var(--accent)';btn.style.borderBottomColor='var(--accent)';btn.style.fontWeight='600';
   const f=document.getElementById('rain-frame');if(!f)return;
-  const overlay=product==='radar'?'radar':'thunder';
+  const overlay=product==='radar'?'radar':'rain';
   f.src=`https://embed.windy.com/embed2.html?lat=${lastLat}&lon=${lastLon}&zoom=8&level=surface&overlay=${overlay}&product=${product}&menu=&message=1&marker=1&calendar=now&pressure=&type=map&location=coordinates&detail=&detailLat=${lastLat}&detailLon=${lastLon}`;
 }
 
