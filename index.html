@@ -358,7 +358,6 @@ async function loadForecast(src){
   document.querySelectorAll(".src-btn").forEach(b=>b.classList.toggle("on",b.dataset.src===src));
   const tab=document.getElementById("t-prev");
   const hdr=tab.querySelector(".src-sel")?.outerHTML||"";
-  _rDestroy();
   tab.innerHTML=hdr+`<div class="no-data">Cargando prevision...</div>`;
 
   try{
@@ -387,44 +386,17 @@ async function loadForecast(src){
         html+=`<div class="fd" onclick="showH(${i})"><div class="fd-i">${d.icon}</div><div class="fd-body"><div class="fd-n">${d.name}</div><div class="fd-p">${d.phrase}</div></div><div class="fd-right"><div class="fd-t"><span class="hi" style="color:${tc(d.hi)}">${d.hi!=null?d.hi+"°":"--"}</span> <span class="lo">${d.lo!=null?d.lo+"°":"--"}</span></div><div class="fd-d">${precTxt} ${windTxt}</div></div></div>`});
       html+=`<div id="hp" class="hp"></div>`;
     }else html+=`<div class="no-data">Prevision no disponible.</div>`;
-    html+=`<div class="card" style="padding:0;overflow:hidden;margin-top:4px">
-      <div id="radar-hdr" style="padding:10px 14px 6px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:#06b6d4">🛰 Radar de precipitación</div>
-      <div id="radar-map" style="height:260px;background:#111"></div>
-      <div style="padding:8px 12px 10px;display:flex;align-items:center;gap:10px">
-        <button id="radar-play" onclick="radarToggle()" style="width:32px;height:32px;border:1px solid var(--border);border-radius:8px;background:var(--bg3);color:var(--text);cursor:pointer;font-size:14px;flex-shrink:0">▶</button>
-        <div style="flex:1;position:relative;height:6px;background:var(--bg3);border-radius:3px;cursor:pointer" onclick="radarSeek(event)">
-          <div id="radar-div" style="position:absolute;top:-4px;bottom:-4px;width:2px;background:rgba(255,255,255,.2);border-radius:1px;pointer-events:none"></div>
-          <div id="radar-thumb" style="position:absolute;top:50%;transform:translate(-50%,-50%);width:12px;height:12px;background:var(--accent);border-radius:50%;left:0%;transition:left .15s;pointer-events:none"></div>
-        </div>
-        <div id="radar-time" style="font-size:11px;color:var(--text2);min-width:90px;text-align:right">Cargando…</div>
-      </div>
+    html+=`<div class="card" style="padding:0;overflow:hidden;margin-top:8px">
+      <div style="padding:10px 14px 6px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:#06b6d4">☁️ Precipitación · previsión ECMWF</div>
+      <iframe
+        src="https://embed.windy.com/embed2.html?lat=${lat}&lon=${lon}&zoom=8&level=surface&overlay=rain&product=ecmwf&menu=&message=1&marker=1&calendar=now&pressure=&type=map&location=coordinates&detail=&detailLat=${lat}&detailLon=${lon}"
+        style="width:100%;height:340px;border:none;display:block"
+        allowfullscreen loading="lazy">
+      </iframe>
     </div>`;
     tab.innerHTML=html;
     tab.querySelectorAll(".src-btn").forEach(b=>b.addEventListener("click",()=>loadForecast(b.dataset.src)));
     if(days.length)showH(0);
-    // Forzar reflow síncrono: sin esto, el navegador no ha calculado las
-    // dimensiones del div cuando L.map() lo mide, y Leaflet centra en 0×0.
-    // Leer offsetWidth obliga al browser a recalcular el layout antes de continuar.
-    // Crear el mapa con un pequeño delay para que el browser calcule el layout
-    setTimeout(()=>{
-      if(!document.getElementById('radar-map'))return;
-      const dk=matchMedia('(prefers-color-scheme:dark)').matches;
-      _rm=L.map('radar-map',{zoomControl:false,attributionControl:false,maxZoom:18});
-      // OpenStreetMap como base (más fiable que CartoCDN en PWAs)
-      L.tileLayer(dk
-        ?'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
-        :'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-        {maxZoom:19,subdomains:'abc'}).addTo(_rm);
-      L.control.zoom({position:'topright'}).addTo(_rm);
-      const lg=L.control({position:'bottomleft'});
-      lg.onAdd=()=>{const d=L.DomUtil.create('div');d.style.cssText='background:rgba(0,0,0,.55);color:#fff;font-size:10px;padding:4px 7px;border-radius:6px;line-height:1.5';d.innerHTML='<span style="color:#00e5ff">■</span> ligera &nbsp;<span style="color:#00ff00">■</span> mod. &nbsp;<span style="color:#ffff00">■</span> fuerte &nbsp;<span style="color:#ff0000">■</span> intensa';return d};
-      lg.addTo(_rm);
-      _rm.invalidateSize();
-      _rm.setView([lat,lon],7);
-      // Marcador de depuración: confirma que las coordenadas son correctas
-      L.circleMarker([lat,lon],{radius:8,color:'#ef4444',fillColor:'#ef4444',fillOpacity:.9,weight:2}).addTo(_rm);
-      _rInit(lat,lon);
-    },300);
 
   }catch(e){tab.innerHTML=(hdr||buildSrcSel(src))+`<div class="no-data" style="color:#ef4444">Error: ${e.message}</div>`;tab.querySelectorAll(".src-btn").forEach(b=>b.addEventListener("click",()=>loadForecast(b.dataset.src)))}
 }
@@ -447,68 +419,6 @@ inp.addEventListener("input",function(){clearTimeout(deb);const q=this.value.tri
 inp.addEventListener("keydown",e=>{if(e.key==="Enter"){sg.style.display="none";const q=inp.value.trim();if(q.length>=2)(async()=>{try{const r=await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)},España&format=json&limit=1&accept-language=es`);if(!r.ok)return;const res=await r.json();if(res.length)go(res[0].display_name.split(",")[0].trim(),+res[0].lat,+res[0].lon)}catch{}})()}});
 document.addEventListener("click",e=>{if(!e.target.closest(".autocomplete-wrapper"))sg.style.display="none"});
 
-// ── RADAR DE PRECIPITACIÓN (RainViewer) ──────────
-let _rm=null,_rl=null,_rf=[],_ri=0,_rt=null,_rp=false,_rd=null;
-
-function _rDestroy(){
-  clearInterval(_rt);_rt=null;_rp=false;
-  if(_rl&&_rm){try{_rm.removeLayer(_rl)}catch(_e){}_rl=null}
-  if(_rm){try{_rm.remove()}catch(_e){}_rm=null}
-  _rf=[];_ri=0;_rd=null;
-}
-
-async function _rInit(lat,lon){
-  // El mapa (_rm) ya está creado y centrado. Aquí solo descargamos datos
-  // y añadimos los tiles del radar.
-  if(!_rm)return;
-  try{
-    const res=await fetch('https://api.rainviewer.com/public/weather-maps.json');
-    _rd=await res.json();
-    const past=_rd.radar.past||[];
-    const nowcast=_rd.radar.nowcast||[];
-    _rf=nowcast.length?[past[past.length-1],...nowcast].filter(Boolean):[...past];
-    const hdrEl=document.getElementById('radar-hdr');
-    if(hdrEl)hdrEl.textContent='🛰 '+(nowcast.length?`Radar · próximos ${nowcast.length*10} min`:'Radar · últimas 2h');
-    if(!_rm||!_rf.length){const t=document.getElementById('radar-time');if(t)t.textContent='Sin datos';return}
-    _rShow(0);
-    _rPlay();
-  }catch(e){
-    const t=document.getElementById('radar-time');
-    if(t)t.textContent='Error: '+e.message;
-  }
-}
-
-function _rShow(i){
-  _ri=((i%_rf.length)+_rf.length)%_rf.length;
-  if(_rl)try{_rm.removeLayer(_rl)}catch(_e){}
-  _rl=L.tileLayer('https://tilecache.rainviewer.com'+_rf[_ri].path+'/256/{z}/{x}/{y}/6/1_1.png',
-    {opacity:.75,zIndex:10}).addTo(_rm);
-  const ts=new Date(_rf[_ri].time*1000);
-  const hasNowcast=(_rd?.radar?.nowcast?.length>0);
-  const mins=Math.round((_rf[_ri].time-_rf[0].time)/60);
-  const label=hasNowcast?(mins===0?'ahora':'+'+mins+'min'):'radar';
-  const tEl=document.getElementById('radar-time');
-  if(tEl)tEl.innerHTML=`<b>${ts.toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'})}</b><br><span style="font-size:9px">${label}</span>`;
-  const pct=_rf.length>1?(_ri/(_rf.length-1))*100:0;
-  const th=document.getElementById('radar-thumb');if(th)th.style.left=pct+'%';
-}
-
-function _rPlay(){
-  _rp=true;const b=document.getElementById('radar-play');if(b)b.textContent='⏸';
-  let hold=0;
-  _rt=setInterval(()=>{
-    const next=_ri+1;
-    if(next>=_rf.length){
-      // Pausa extra al llegar al último frame antes de reiniciar
-      if(hold<2){hold++;return}
-      hold=0;_rShow(0);
-    }else{hold=0;_rShow(next)}
-  },700);
-}
-function _rStop(){_rp=false;const b=document.getElementById('radar-play');if(b)b.textContent='▶';clearInterval(_rt)}
-function radarToggle(){_rp?_rStop():_rPlay()}
-function radarSeek(e){const r=e.currentTarget.getBoundingClientRect();const p=Math.max(0,Math.min(1,(e.clientX-r.left)/r.width));_rStop();_rShow(Math.round(p*(_rf.length-1)))}
-// ─────────────────────────────────────────────────
 
 document.getElementById("btn-gps").addEventListener("click",()=>{if(!navigator.geolocation){alert("Geolocalizacion no disponible");return}prog(5);
 navigator.geolocation.getCurrentPosition(async p=>{const la=p.coords.latitude,lo=p.coords.longitude;try{const r=await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${la}&lon=${lo}&format=json&accept-language=es`);if(r.ok){const d=await r.json(),n=d.address?.city||d.address?.town||d.address?.village||d.address?.municipality||"Mi ubicacion";inp.value=n;go(n,la,lo)}else go("Mi ubicacion",la,lo)}catch{go("Mi ubicacion",la,lo)}},er=>{hprog();alert("Error: "+er.message)},{enableHighAccuracy:true,timeout:10000})});
