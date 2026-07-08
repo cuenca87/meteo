@@ -358,6 +358,7 @@ async function loadForecast(src){
   document.querySelectorAll(".src-btn").forEach(b=>b.classList.toggle("on",b.dataset.src===src));
   const tab=document.getElementById("t-prev");
   const hdr=tab.querySelector(".src-sel")?.outerHTML||"";
+  _rDestroy();
   tab.innerHTML=hdr+`<div class="no-data">Cargando prevision...</div>`;
 
   try{
@@ -377,10 +378,6 @@ async function loadForecast(src){
     }
 
     let html=hdr||buildSrcSel(src);
-    html+=`<div style="display:flex;gap:8px;margin-bottom:14px">
-      <a href="https://www.windy.com/?rain,next,48,${lat},${lon},8" target="_blank" style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;padding:10px 6px;background:var(--accent);color:#fff;border-radius:10px;text-decoration:none;font-size:13px;font-weight:600">🌀 Windy</a>
-      <a href="https://www.aemet.es/es/eltiempo/observacion/radar" target="_blank" style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;padding:10px 6px;background:var(--bg3);color:var(--text);border:1px solid var(--border);border-radius:10px;text-decoration:none;font-size:13px;font-weight:600">🛰 AEMET</a>
-    </div>`;
     if(days.length){
       const todayHi=days[0].hi,todayLo=days[0].lo;
       html+=`<div style="text-align:center;margin-bottom:12px"><span style="color:var(--text2)">Hoy:</span> <b style="color:${tc(todayLo)}">${todayLo!=null?todayLo+"°":"--"}</b> <span style="color:var(--text2)">min</span> · <b style="color:${tc(todayHi)}">${todayHi!=null?todayHi+"°":"--"}</b> <span style="color:var(--text2)">max</span></div>`;
@@ -390,9 +387,22 @@ async function loadForecast(src){
         html+=`<div class="fd" onclick="showH(${i})"><div class="fd-i">${d.icon}</div><div class="fd-body"><div class="fd-n">${d.name}</div><div class="fd-p">${d.phrase}</div></div><div class="fd-right"><div class="fd-t"><span class="hi" style="color:${tc(d.hi)}">${d.hi!=null?d.hi+"°":"--"}</span> <span class="lo">${d.lo!=null?d.lo+"°":"--"}</span></div><div class="fd-d">${precTxt} ${windTxt}</div></div></div>`});
       html+=`<div id="hp" class="hp"></div>`;
     }else html+=`<div class="no-data">Prevision no disponible.</div>`;
+    html+=`<div class="card" style="padding:0;overflow:hidden;margin-top:4px">
+      <div style="padding:10px 14px 6px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:#06b6d4">🛰 Radar de precipitación</div>
+      <div id="radar-map" style="height:260px;background:#111"></div>
+      <div style="padding:8px 12px 10px;display:flex;align-items:center;gap:10px">
+        <button id="radar-play" onclick="radarToggle()" style="width:32px;height:32px;border:1px solid var(--border);border-radius:8px;background:var(--bg3);color:var(--text);cursor:pointer;font-size:14px;flex-shrink:0">▶</button>
+        <div style="flex:1;position:relative;height:6px;background:var(--bg3);border-radius:3px;cursor:pointer" onclick="radarSeek(event)">
+          <div id="radar-div" style="position:absolute;top:-4px;bottom:-4px;width:2px;background:rgba(255,255,255,.2);border-radius:1px;pointer-events:none"></div>
+          <div id="radar-thumb" style="position:absolute;top:50%;transform:translate(-50%,-50%);width:12px;height:12px;background:var(--accent);border-radius:50%;left:0%;transition:left .15s;pointer-events:none"></div>
+        </div>
+        <div id="radar-time" style="font-size:11px;color:var(--text2);min-width:90px;text-align:right">Cargando…</div>
+      </div>
+    </div>`;
     tab.innerHTML=html;
     tab.querySelectorAll(".src-btn").forEach(b=>b.addEventListener("click",()=>loadForecast(b.dataset.src)));
     if(days.length)showH(0);
+    setTimeout(()=>_rInit(lat,lon),120);
   }catch(e){tab.innerHTML=(hdr||buildSrcSel(src))+`<div class="no-data" style="color:#ef4444">Error: ${e.message}</div>`;tab.querySelectorAll(".src-btn").forEach(b=>b.addEventListener("click",()=>loadForecast(b.dataset.src)))}
 }
 function buildSrcSel(cur){return`<div class="src-sel"><button class="src-btn ${cur==="wc"?"on":""}" data-src="wc">Weather Co.</button><button class="src-btn ${cur==="om"?"on":""}" data-src="om">Open-Meteo</button></div>`}
@@ -413,6 +423,66 @@ let deb=null;const inp=document.getElementById("inp"),sg=document.getElementById
 inp.addEventListener("input",function(){clearTimeout(deb);const q=this.value.trim();if(q.length<3){sg.style.display="none";return}deb=setTimeout(async()=>{try{const r=await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)},España&format=json&limit=8&addressdetails=1&accept-language=es`);if(!r.ok)return;const res=await r.json(),f=res.filter(r=>["city","town","village","municipality","administrative"].includes(r.type)||r.class==="place");if(!f.length){sg.style.display="none";return}sg.innerHTML="";for(const r of f){const d=document.createElement("div"),p=r.display_name.split(","),n=p[0].trim();d.innerHTML=n+`<small>${p.slice(1,3).map(s=>s.trim()).join(", ")}</small>`;d.addEventListener("click",()=>{inp.value=n;sg.style.display="none";go(n,+r.lat,+r.lon)});sg.appendChild(d)}sg.style.display="block"}catch{}},400)});
 inp.addEventListener("keydown",e=>{if(e.key==="Enter"){sg.style.display="none";const q=inp.value.trim();if(q.length>=2)(async()=>{try{const r=await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)},España&format=json&limit=1&accept-language=es`);if(!r.ok)return;const res=await r.json();if(res.length)go(res[0].display_name.split(",")[0].trim(),+res[0].lat,+res[0].lon)}catch{}})()}});
 document.addEventListener("click",e=>{if(!e.target.closest(".autocomplete-wrapper"))sg.style.display="none"});
+
+// ── RADAR DE PRECIPITACIÓN (RainViewer) ──────────
+let _rm=null,_rl=null,_rf=[],_ri=0,_rt=null,_rp=false,_rd=null;
+
+function _rDestroy(){
+  clearInterval(_rt);_rt=null;_rp=false;
+  if(_rl&&_rm){try{_rm.removeLayer(_rl)}catch(_e){}_rl=null}
+  if(_rm){try{_rm.remove()}catch(_e){}_rm=null}
+  _rf=[];_ri=0;_rd=null;
+}
+
+async function _rInit(lat,lon){
+  const el=document.getElementById('radar-map');
+  if(!el)return;
+  try{
+    const res=await fetch('https://api.rainviewer.com/public/weather-maps.json');
+    _rd=await res.json();
+    _rf=[...(_rd.radar.past||[]),...(_rd.radar.nowcast||[])];
+    if(!_rf.length){el.innerHTML='<div class="no-data">Sin datos de radar disponibles</div>';return}
+    _rm=L.map('radar-map',{zoomControl:false,attributionControl:false}).setView([lat,lon],7);
+    const dk=matchMedia('(prefers-color-scheme:dark)').matches;
+    L.tileLayer(dk
+      ?'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
+      :'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+      {maxZoom:19}).addTo(_rm);
+    L.control.zoom({position:'topright'}).addTo(_rm);
+    // Leyenda de colores
+    const leg=L.control({position:'bottomleft'});
+    leg.onAdd=()=>{const d=L.DomUtil.create('div');d.style.cssText='background:rgba(0,0,0,.55);color:#fff;font-size:10px;padding:4px 7px;border-radius:6px;line-height:1.5';d.innerHTML='<span style="color:#00e5ff">■</span> ligera &nbsp;<span style="color:#00ff00">■</span> mod. &nbsp;<span style="color:#ffff00">■</span> fuerte &nbsp;<span style="color:#ff0000">■</span> intensa';return d};
+    leg.addTo(_rm);
+    const pastN=_rd.radar.past?.length||0;
+    _rShow(Math.max(0,pastN-1));
+    _rPlay();
+  }catch(e){
+    const t=document.getElementById('radar-time');
+    if(t)t.textContent='Error: '+e.message;
+  }
+}
+
+function _rShow(i){
+  _ri=((i%_rf.length)+_rf.length)%_rf.length;
+  if(_rl)try{_rm.removeLayer(_rl)}catch(_e){}
+  _rl=L.tileLayer('https://tilecache.rainviewer.com'+_rf[_ri].path+'/256/{z}/{x}/{y}/6/1_1.png',
+    {opacity:.75,maxZoom:19,zIndex:10}).addTo(_rm);
+  const ts=new Date(_rf[_ri].time*1000);
+  const pastN=_rd?.radar?.past?.length||0;
+  const isNow=_ri>=pastN;
+  const tEl=document.getElementById('radar-time');
+  if(tEl)tEl.innerHTML=`<b>${ts.toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'})}</b><br><span style="font-size:9px">${isNow?'nowcast':'radar'}</span>`;
+  const pct=_rf.length>1?(_ri/(_rf.length-1))*100:0;
+  const th=document.getElementById('radar-thumb');if(th)th.style.left=pct+'%';
+  const dv=document.getElementById('radar-div');
+  if(dv&&_rf.length>1)dv.style.left=((pastN-0.5)/(_rf.length-1)*100)+'%';
+}
+
+function _rPlay(){_rp=true;const b=document.getElementById('radar-play');if(b)b.textContent='⏸';_rt=setInterval(()=>_rShow(_ri+1),650)}
+function _rStop(){_rp=false;const b=document.getElementById('radar-play');if(b)b.textContent='▶';clearInterval(_rt)}
+function radarToggle(){_rp?_rStop():_rPlay()}
+function radarSeek(e){const r=e.currentTarget.getBoundingClientRect();const p=Math.max(0,Math.min(1,(e.clientX-r.left)/r.width));_rStop();_rShow(Math.round(p*(_rf.length-1)))}
+// ─────────────────────────────────────────────────
 
 document.getElementById("btn-gps").addEventListener("click",()=>{if(!navigator.geolocation){alert("Geolocalizacion no disponible");return}prog(5);
 navigator.geolocation.getCurrentPosition(async p=>{const la=p.coords.latitude,lo=p.coords.longitude;try{const r=await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${la}&lon=${lo}&format=json&accept-language=es`);if(r.ok){const d=await r.json(),n=d.address?.city||d.address?.town||d.address?.village||d.address?.municipality||"Mi ubicacion";inp.value=n;go(n,la,lo)}else go("Mi ubicacion",la,lo)}catch{go("Mi ubicacion",la,lo)}},er=>{hprog();alert("Error: "+er.message)},{enableHighAccuracy:true,timeout:10000})});
