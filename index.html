@@ -402,7 +402,20 @@ async function loadForecast(src){
     tab.innerHTML=html;
     tab.querySelectorAll(".src-btn").forEach(b=>b.addEventListener("click",()=>loadForecast(b.dataset.src)));
     if(days.length)showH(0);
-    setTimeout(()=>_rInit(lat,lon),120);
+    // Crear el mapa de forma SÍNCRONA: el DOM acaba de pintarse, el div tiene
+    // sus dimensiones definitivas. invalidateSize() y setView() funcionan bien aquí.
+    {
+      const dk=matchMedia('(prefers-color-scheme:dark)').matches;
+      _rm=L.map('radar-map',{zoomControl:false,attributionControl:false,maxZoom:18});
+      L.tileLayer(dk?'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png':'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',{maxZoom:19}).addTo(_rm);
+      L.control.zoom({position:'topright'}).addTo(_rm);
+      const lg=L.control({position:'bottomleft'});
+      lg.onAdd=()=>{const d=L.DomUtil.create('div');d.style.cssText='background:rgba(0,0,0,.55);color:#fff;font-size:10px;padding:4px 7px;border-radius:6px;line-height:1.5';d.innerHTML='<span style="color:#00e5ff">■</span> ligera &nbsp;<span style="color:#00ff00">■</span> mod. &nbsp;<span style="color:#ffff00">■</span> fuerte &nbsp;<span style="color:#ff0000">■</span> intensa';return d};
+      lg.addTo(_rm);
+      _rm.invalidateSize();
+      _rm.setView([lat,lon],7);
+    }
+    _rInit(lat,lon); // solo descarga datos y añade tiles al mapa ya creado
   }catch(e){tab.innerHTML=(hdr||buildSrcSel(src))+`<div class="no-data" style="color:#ef4444">Error: ${e.message}</div>`;tab.querySelectorAll(".src-btn").forEach(b=>b.addEventListener("click",()=>loadForecast(b.dataset.src)))}
 }
 function buildSrcSel(cur){return`<div class="src-sel"><button class="src-btn ${cur==="wc"?"on":""}" data-src="wc">Weather Co.</button><button class="src-btn ${cur==="om"?"on":""}" data-src="om">Open-Meteo</button></div>`}
@@ -435,32 +448,18 @@ function _rDestroy(){
 }
 
 async function _rInit(lat,lon){
-  if(!document.getElementById('radar-map'))return;
+  // El mapa (_rm) ya está creado y centrado. Aquí solo descargamos datos
+  // y añadimos los tiles del radar.
+  if(!_rm)return;
   try{
     const res=await fetch('https://api.rainviewer.com/public/weather-maps.json');
     _rd=await res.json();
     const past=_rd.radar.past||[];
     const nowcast=_rd.radar.nowcast||[];
-    // Con nowcast: [ahora, +10min, +20min...]. Sin nowcast: últimas 2h de radar.
     _rf=nowcast.length?[past[past.length-1],...nowcast].filter(Boolean):[...past];
     const hdrEl=document.getElementById('radar-hdr');
     if(hdrEl)hdrEl.textContent='🛰 '+(nowcast.length?`Radar · próximos ${nowcast.length*10} min`:'Radar · últimas 2h');
-    if(!document.getElementById('radar-map'))return;
-    if(!_rf.length){document.getElementById('radar-map').innerHTML='<div class="no-data">Sin datos de radar disponibles</div>';return}
-    // Crear mapa SIN setView inicial. invalidateSize() primero asegura que Leaflet
-    // mide el contenedor correctamente antes de centrar el mapa.
-    _rm=L.map('radar-map',{zoomControl:false,attributionControl:false,maxZoom:18});
-    const dk=matchMedia('(prefers-color-scheme:dark)').matches;
-    L.tileLayer(dk
-      ?'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
-      :'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
-      {maxZoom:19}).addTo(_rm);
-    L.control.zoom({position:'topright'}).addTo(_rm);
-    const leg=L.control({position:'bottomleft'});
-    leg.onAdd=()=>{const d=L.DomUtil.create('div');d.style.cssText='background:rgba(0,0,0,.55);color:#fff;font-size:10px;padding:4px 7px;border-radius:6px;line-height:1.5';d.innerHTML='<span style="color:#00e5ff">■</span> ligera &nbsp;<span style="color:#00ff00">■</span> mod. &nbsp;<span style="color:#ffff00">■</span> fuerte &nbsp;<span style="color:#ff0000">■</span> intensa';return d};
-    leg.addTo(_rm);
-    _rm.invalidateSize();          // medir el contenedor antes de centrar
-    _rm.setView([lat,lon],7);
+    if(!_rm||!_rf.length){const t=document.getElementById('radar-time');if(t)t.textContent='Sin datos';return}
     _rShow(0);
     _rPlay();
   }catch(e){
