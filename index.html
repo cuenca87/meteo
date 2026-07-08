@@ -388,7 +388,7 @@ async function loadForecast(src){
       html+=`<div id="hp" class="hp"></div>`;
     }else html+=`<div class="no-data">Prevision no disponible.</div>`;
     html+=`<div class="card" style="padding:0;overflow:hidden;margin-top:4px">
-      <div style="padding:10px 14px 6px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:#06b6d4">🛰 Radar de precipitación</div>
+      <div id="radar-hdr" style="padding:10px 14px 6px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:#06b6d4">🛰 Radar de precipitación</div>
       <div id="radar-map" style="height:260px;background:#111"></div>
       <div style="padding:8px 12px 10px;display:flex;align-items:center;gap:10px">
         <button id="radar-play" onclick="radarToggle()" style="width:32px;height:32px;border:1px solid var(--border);border-radius:8px;background:var(--bg3);color:var(--text);cursor:pointer;font-size:14px;flex-shrink:0">▶</button>
@@ -439,23 +439,17 @@ async function _rInit(lat,lon){
   try{
     const res=await fetch('https://api.rainviewer.com/public/weather-maps.json');
     _rd=await res.json();
-    // Solo frames desde el instante actual en adelante (nowcast). Si no hay nowcast,
-    // usamos todos los frames del pasado para mostrar la trayectoria de la lluvia.
     const past=_rd.radar.past||[];
     const nowcast=_rd.radar.nowcast||[];
-    if(nowcast.length){
-      // Incluimos el último frame del pasado (instante actual) + todos los nowcast
-      _rf=[past[past.length-1],...nowcast].filter(Boolean);
-    }else{
-      // Sin nowcast: mostramos todos los frames pasados (la dirección de la lluvia)
-      _rf=[...past];
-    }
+    // Con nowcast: [ahora, +10min, +20min...]. Sin nowcast: últimas 2h de radar.
+    _rf=nowcast.length?[past[past.length-1],...nowcast].filter(Boolean):[...past];
+    const hdrEl=document.getElementById('radar-hdr');
+    if(hdrEl)hdrEl.textContent='🛰 '+(nowcast.length?`Radar · próximos ${nowcast.length*10} min`:'Radar · últimas 2h');
     if(!document.getElementById('radar-map'))return;
     if(!_rf.length){document.getElementById('radar-map').innerHTML='<div class="no-data">Sin datos de radar disponibles</div>';return}
-    _rm=L.map('radar-map',{zoomControl:false,attributionControl:false,maxZoom:18}).setView([lat,lon],7);
-    // Tras el primer render, ajustar tamaño Y re-centrar (el contenedor puede no tener
-    // dimensiones definitivas en el momento de la creación del mapa)
-    setTimeout(()=>{if(_rm){_rm.invalidateSize();_rm.setView([lat,lon],7)}},300);
+    // Crear mapa SIN setView inicial. invalidateSize() primero asegura que Leaflet
+    // mide el contenedor correctamente antes de centrar el mapa.
+    _rm=L.map('radar-map',{zoomControl:false,attributionControl:false,maxZoom:18});
     const dk=matchMedia('(prefers-color-scheme:dark)').matches;
     L.tileLayer(dk
       ?'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
@@ -465,7 +459,9 @@ async function _rInit(lat,lon){
     const leg=L.control({position:'bottomleft'});
     leg.onAdd=()=>{const d=L.DomUtil.create('div');d.style.cssText='background:rgba(0,0,0,.55);color:#fff;font-size:10px;padding:4px 7px;border-radius:6px;line-height:1.5';d.innerHTML='<span style="color:#00e5ff">■</span> ligera &nbsp;<span style="color:#00ff00">■</span> mod. &nbsp;<span style="color:#ffff00">■</span> fuerte &nbsp;<span style="color:#ff0000">■</span> intensa';return d};
     leg.addTo(_rm);
-    _rShow(0);  // empieza siempre en el primer frame (instante actual o más antiguo disponible)
+    _rm.invalidateSize();          // medir el contenedor antes de centrar
+    _rm.setView([lat,lon],7);
+    _rShow(0);
     _rPlay();
   }catch(e){
     const t=document.getElementById('radar-time');
@@ -479,15 +475,27 @@ function _rShow(i){
   _rl=L.tileLayer('https://tilecache.rainviewer.com'+_rf[_ri].path+'/256/{z}/{x}/{y}/6/1_1.png',
     {opacity:.75,maxZoom:18,maxNativeZoom:10,zIndex:10}).addTo(_rm);
   const ts=new Date(_rf[_ri].time*1000);
-  const nowcastStart=(_rd?.radar?.nowcast?.length&&_rd.radar.past?.length)?1:0;
-  const isNow=_ri>=nowcastStart;
+  const hasNowcast=(_rd?.radar?.nowcast?.length>0);
+  const mins=Math.round((_rf[_ri].time-_rf[0].time)/60);
+  const label=hasNowcast?(mins===0?'ahora':'+'+mins+'min'):'radar';
   const tEl=document.getElementById('radar-time');
-  if(tEl)tEl.innerHTML=`<b>${ts.toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'})}</b><br><span style="font-size:9px">${isNow?'nowcast':'radar'}</span>`;
+  if(tEl)tEl.innerHTML=`<b>${ts.toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'})}</b><br><span style="font-size:9px">${label}</span>`;
   const pct=_rf.length>1?(_ri/(_rf.length-1))*100:0;
   const th=document.getElementById('radar-thumb');if(th)th.style.left=pct+'%';
 }
 
-function _rPlay(){_rp=true;const b=document.getElementById('radar-play');if(b)b.textContent='⏸';_rt=setInterval(()=>_rShow(_ri+1),700)}
+function _rPlay(){
+  _rp=true;const b=document.getElementById('radar-play');if(b)b.textContent='⏸';
+  let hold=0;
+  _rt=setInterval(()=>{
+    const next=_ri+1;
+    if(next>=_rf.length){
+      // Pausa extra al llegar al último frame antes de reiniciar
+      if(hold<2){hold++;return}
+      hold=0;_rShow(0);
+    }else{hold=0;_rShow(next)}
+  },700);
+}
 function _rStop(){_rp=false;const b=document.getElementById('radar-play');if(b)b.textContent='▶';clearInterval(_rt)}
 function radarToggle(){_rp?_rStop():_rPlay()}
 function radarSeek(e){const r=e.currentTarget.getBoundingClientRect();const p=Math.max(0,Math.min(1,(e.clientX-r.left)/r.width));_rStop();_rShow(Math.round(p*(_rf.length-1)))}
