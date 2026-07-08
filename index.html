@@ -11,6 +11,7 @@
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 <style>
 :root{
   --bg:#f5f7fa;--bg2:#fff;--bg3:#f0f2f5;--text:#1e293b;--text2:#64748b;--accent:#2563eb;
@@ -44,7 +45,8 @@ header h1 small{font-weight:400;color:rgba(255,255,255,.7);font-size:11px;displa
 #pbar>div{height:100%;background:var(--accent);transition:width .3s;border-radius:3px}
 
 .tabs{display:none;border-bottom:1px solid var(--border);flex-shrink:0;background:var(--bg2)}
-.tabs button{flex:1;padding:10px 4px;text-align:center;cursor:pointer;background:transparent;color:var(--text2);border:none;border-bottom:2px solid transparent;font-size:13px;font-weight:500;transition:all .15s}
+.tabs button{flex:1;padding:7px 4px 5px;cursor:pointer;background:transparent;color:var(--text2);border:none;border-bottom:2px solid transparent;font-size:10px;font-weight:500;transition:all .15s;display:flex;flex-direction:column;align-items:center;gap:3px}
+.tabs button svg{width:20px;height:20px;stroke-width:1.75;transition:color .15s}
 .tabs button.on{color:var(--accent);border-bottom-color:var(--accent);font-weight:600}
 
 #content{flex:1;position:relative;overflow:hidden;min-height:0}
@@ -129,15 +131,15 @@ header h1 small{font-weight:400;color:rgba(255,255,255,.7);font-size:11px;displa
 <header><h1>Visor Meteorológico<small>Estaciones personales + IHM</small></h1><div id="loc-name"></div></header>
 <div class="search-row">
   <div class="autocomplete-wrapper"><input id="inp" placeholder="Buscar municipio..." autocomplete="off"><div id="sug"></div></div>
-  <button id="btn-gps" title="Mi ubicacion">&#9737;</button>
+  <button id="btn-gps" title="Mi ubicacion"><i data-lucide="locate"></i></button>
 </div>
 <div id="pbar"><div></div></div>
 <div class="tabs" id="tabs">
-  <button class="on" onclick="stab('ahora')">Ahora</button>
-  <button onclick="stab('ayer')">Ayer</button>
-  <button onclick="stab('prev')">Prevision</button>
-  <button onclick="stab('mar')">Luna/Mareas</button>
-  <button onclick="stab('est')">Estaciones</button>
+  <button class="on" onclick="stab('ahora')"><i data-lucide="thermometer"></i><span>Ahora</span></button>
+  <button onclick="stab('ayer')"><i data-lucide="history"></i><span>Ayer</span></button>
+  <button onclick="stab('prev')"><i data-lucide="cloud-sun"></i><span>Previsión</span></button>
+  <button onclick="stab('mar')"><i data-lucide="waves"></i><span>Mareas</span></button>
+  <button onclick="stab('est')"><i data-lucide="radio"></i><span>Estaciones</span></button>
 </div>
 <div id="content">
   <div id="t-ahora" class="tv on"><div class="no-data">Busque un municipio o pulse &#9737;<br>para ver el tiempo en su ubicacion</div></div>
@@ -347,9 +349,11 @@ function wl(d){if(d==null)return"-";return["N","NNE","NE","ENE","E","ESE","SE","
 function ta(u){if(!u)return"-";const d=Math.floor((Date.now()-new Date(u).getTime())/60000);if(d<1)return"ahora";if(d<60)return d+"min";if(d<1440)return Math.floor(d/60)+"h";return Math.floor(d/1440)+"d"}
 function cl(t,h){if(t==null||h==null)return{t:"-",c:"var(--text2)"};if(t<5)return{t:"Frio intenso",c:"#3b82f6"};if(t<12)return{t:"Frio",c:"#06b6d4"};if(t<18)return{t:"Fresco",c:"#22c55e"};if(t<=26&&h<=60)return{t:"Confortable",c:"#10b981"};if(t<=26)return{t:"Algo humedo",c:"#84cc16"};if(t<=32&&h<=40)return{t:"Caluroso",c:"#f59e0b"};if(t<=32)return{t:"Bochornoso",c:"#f97316"};return{t:"Calor extremo",c:"#ef4444"}}
 function ul(u){if(u==null)return{t:"-",c:"var(--text2)"};if(u<=2)return{t:"Bajo",c:"#22c55e"};if(u<=5)return{t:"Moderado",c:"#eab308"};if(u<=7)return{t:"Alto",c:"#f97316"};if(u<=10)return{t:"Muy alto",c:"#ef4444"};return{t:"Extremo",c:"#a855f7"}}
-function wi(c){if(c==null)return"";const i={0:"🌀",1:"⛈",2:"⛈",3:"⛈",4:"⛈",5:"🌨",6:"🌧",7:"🌨",8:"🌧",9:"🌧",10:"🌧",11:"🌧",12:"🌧",13:"🌨",14:"🌨",15:"🌨",16:"🌨",17:"🌧",18:"🌧",19:"🌫",20:"🌫",21:"🌫",22:"🌫",23:"🌬",24:"🌬",25:"❄",26:"☁",27:"🌥",28:"🌥",29:"⛅",30:"⛅",31:"🌙",32:"☀",33:"🌙",34:"☀",35:"🌧",36:"🌡",37:"⛈",38:"⛈",39:"🌦",40:"🌦",41:"🌨",42:"🌨",43:"🌨",44:"",45:"🌦",46:"🌨",47:"⛈"};return i[c]||"🌡"}
+const _MC='https://cdn.jsdelivr.net/gh/basmilius/weather-icons/production/fill/all/';
+function _mc(n,s=40){return`<img src="${_MC}${n}.svg" width="${s}" height="${s}" alt="" style="vertical-align:middle">`}
+function wi(c){if(c==null)return"";const m={0:'thunderstorms-rain',1:'thunderstorms-rain',2:'thunderstorms-rain',3:'thunderstorms-rain',4:'thunderstorms',5:'sleet',6:'sleet',7:'sleet',8:'drizzle',9:'drizzle',10:'sleet',11:'rain',12:'rain',13:'snow',14:'snow',15:'snow',16:'snow',17:'hail',18:'sleet',19:'fog',20:'fog',21:'fog',22:'fog',23:'wind',24:'wind',25:'snow',26:'cloudy',27:'partly-cloudy-night',28:'partly-cloudy-day',29:'partly-cloudy-night',30:'partly-cloudy-day',31:'clear-night',32:'clear-day',33:'clear-night',34:'clear-day',35:'hail',36:'clear-day',37:'thunderstorms',38:'thunderstorms',39:'rain',40:'rain',41:'snow',42:'snow',43:'snow',44:'not-available',45:'rain',46:'snow',47:'thunderstorms'};return _mc(m[c]||'not-available')}
 
-function wmoIcon(c){const i={0:"☀",1:"🌤",2:"⛅",3:"☁",45:"🌫",48:"🌫",51:"🌦",53:"🌧",55:"🌧",56:"🌧",57:"🌧",61:"🌧",63:"🌧",65:"🌧",66:"🌧",67:"🌧",71:"🌨",73:"🌨",75:"❄",77:"❄",80:"🌦",81:"🌧",82:"🌧",85:"🌨",86:"🌨",95:"⛈",96:"⛈",99:"⛈"};return i[c]||"🌡"}
+function wmoIcon(c){const m={0:'clear-day',1:'partly-cloudy-day',2:'partly-cloudy-day',3:'cloudy',45:'fog',48:'fog',51:'drizzle',53:'drizzle',55:'drizzle',56:'sleet',57:'sleet',61:'rain',63:'rain',65:'rain',66:'sleet',67:'sleet',71:'snow',73:'snow',75:'snow',77:'snow',80:'rain',81:'rain',82:'rain',85:'snow',86:'snow',95:'thunderstorms-rain',96:'thunderstorms-rain',99:'thunderstorms-rain'};return _mc(m[c]||'not-available')}
 function wmoText(c){const t={0:"Despejado",1:"Poco nuboso",2:"Parcialmente nublado",3:"Nublado",45:"Niebla",48:"Niebla",51:"Llovizna",53:"Llovizna",55:"Llovizna intensa",61:"Lluvia ligera",63:"Lluvia moderada",65:"Lluvia intensa",71:"Nevada ligera",73:"Nevada moderada",75:"Nevada intensa",80:"Chubascos",81:"Chubascos moderados",82:"Chubascos intensos",95:"Tormenta",96:"Tormenta con granizo",99:"Tormenta fuerte"};return t[c]||""}
 
 let lastLat=0,lastLon=0,lastFcSrc="wc";
@@ -596,6 +600,7 @@ async function go(name,lat,lon){
     if(bds.isValid()){M._stBounds=bds}prog(100);setTimeout(hprog,500);
   }catch(e){document.getElementById("t-ahora").innerHTML=`<div class="no-data" style="color:#ef4444">Error: ${e.message}</div>`;hprog()}
 }
+if(typeof lucide!=='undefined')lucide.createIcons();
 </script>
 </body>
 </html>
