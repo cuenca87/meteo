@@ -387,11 +387,14 @@ async function loadForecast(src){
       html+=`<div id="hp" class="hp"></div>`;
     }else html+=`<div class="no-data">Prevision no disponible.</div>`;
     html+=`<div class="card" style="padding:0;overflow:hidden;margin-top:8px">
-      <div style="padding:10px 14px 6px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:#06b6d4">☁️ Precipitación · previsión ECMWF</div>
-      <iframe
-        src="https://embed.windy.com/embed2.html?lat=${lat}&lon=${lon}&zoom=8&level=surface&overlay=rain&product=ecmwf&menu=&message=1&marker=1&calendar=now&pressure=&type=map&location=coordinates&detail=&detailLat=${lat}&detailLon=${lon}"
+      <div style="display:flex;border-bottom:1px solid var(--border)">
+        <button class="rain-tab on" onclick="switchRain(this,'radar')" style="flex:1;padding:10px 4px;border:none;border-bottom:2px solid var(--accent);background:transparent;cursor:pointer;font-size:12px;font-weight:600;color:var(--accent)">🛰 Radar</button>
+        <button class="rain-tab" onclick="switchRain(this,'ecmwf')" style="flex:1;padding:10px 4px;border:none;border-bottom:2px solid transparent;background:transparent;cursor:pointer;font-size:12px;font-weight:500;color:var(--text2)">📅 Previsión 10d</button>
+      </div>
+      <iframe id="rain-frame"
+        src="https://embed.windy.com/embed2.html?lat=${lat}&lon=${lon}&zoom=8&level=surface&overlay=rain&product=radar&menu=&message=1&marker=1&calendar=now&pressure=&type=map&location=coordinates&detail=&detailLat=${lat}&detailLon=${lon}"
         style="width:100%;height:340px;border:none;display:block"
-        allowfullscreen loading="lazy">
+        allowfullscreen>
       </iframe>
     </div>`;
     tab.innerHTML=html;
@@ -419,6 +422,13 @@ inp.addEventListener("input",function(){clearTimeout(deb);const q=this.value.tri
 inp.addEventListener("keydown",e=>{if(e.key==="Enter"){sg.style.display="none";const q=inp.value.trim();if(q.length>=2)(async()=>{try{const r=await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)},España&format=json&limit=1&accept-language=es`);if(!r.ok)return;const res=await r.json();if(res.length)go(res[0].display_name.split(",")[0].trim(),+res[0].lat,+res[0].lon)}catch{}})()}});
 document.addEventListener("click",e=>{if(!e.target.closest(".autocomplete-wrapper"))sg.style.display="none"});
 
+
+function switchRain(btn,product){
+  document.querySelectorAll('.rain-tab').forEach(b=>{b.style.color='var(--text2)';b.style.borderBottomColor='transparent';b.style.fontWeight='500'});
+  btn.style.color='var(--accent)';btn.style.borderBottomColor='var(--accent)';btn.style.fontWeight='600';
+  const f=document.getElementById('rain-frame');if(!f)return;
+  f.src=`https://embed.windy.com/embed2.html?lat=${lastLat}&lon=${lastLon}&zoom=8&level=surface&overlay=rain&product=${product}&menu=&message=1&marker=1&calendar=now&pressure=&type=map&location=coordinates&detail=&detailLat=${lastLat}&detailLon=${lastLon}`;
+}
 
 document.getElementById("btn-gps").addEventListener("click",()=>{if(!navigator.geolocation){alert("Geolocalizacion no disponible");return}prog(5);
 navigator.geolocation.getCurrentPosition(async p=>{const la=p.coords.latitude,lo=p.coords.longitude;try{const r=await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${la}&lon=${lo}&format=json&accept-language=es`);if(r.ok){const d=await r.json(),n=d.address?.city||d.address?.town||d.address?.village||d.address?.municipality||"Mi ubicacion";inp.value=n;go(n,la,lo)}else go("Mi ubicacion",la,lo)}catch{go("Mi ubicacion",la,lo)}},er=>{hprog();alert("Error: "+er.message)},{enableHighAccuracy:true,timeout:10000})});
