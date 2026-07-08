@@ -402,8 +402,10 @@ async function loadForecast(src){
     tab.innerHTML=html;
     tab.querySelectorAll(".src-btn").forEach(b=>b.addEventListener("click",()=>loadForecast(b.dataset.src)));
     if(days.length)showH(0);
-    // Crear el mapa de forma SÍNCRONA: el DOM acaba de pintarse, el div tiene
-    // sus dimensiones definitivas. invalidateSize() y setView() funcionan bien aquí.
+    // Forzar reflow síncrono: sin esto, el navegador no ha calculado las
+    // dimensiones del div cuando L.map() lo mide, y Leaflet centra en 0×0.
+    // Leer offsetWidth obliga al browser a recalcular el layout antes de continuar.
+    void document.getElementById('radar-map').offsetWidth;
     {
       const dk=matchMedia('(prefers-color-scheme:dark)').matches;
       _rm=L.map('radar-map',{zoomControl:false,attributionControl:false,maxZoom:18});
