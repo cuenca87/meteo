@@ -138,14 +138,12 @@ header h1 small{font-weight:400;color:rgba(255,255,255,.7);font-size:11px;displa
   <button class="on" onclick="stab('ahora')"><i data-lucide="thermometer"></i><span>Ahora</span></button>
   <button onclick="stab('ayer')"><i data-lucide="history"></i><span>Ayer</span></button>
   <button onclick="stab('prev')"><i data-lucide="cloud-sun"></i><span>Previsión</span></button>
-  <button onclick="stab('mar')"><i data-lucide="waves"></i><span>Mareas</span></button>
   <button onclick="stab('est')"><i data-lucide="radio"></i><span>Estaciones</span></button>
 </div>
 <div id="content">
   <div id="t-ahora" class="tv on"><div class="no-data">Busque un municipio o pulse &#9737;<br>para ver el tiempo en su ubicacion</div></div>
   <div id="t-ayer" class="tv"></div>
   <div id="t-prev" class="tv"></div>
-  <div id="t-mar" class="tv"></div>
   <div id="t-est" class="tv"></div>
 </div>
 </div>
@@ -409,7 +407,7 @@ async function loadForecast(src){
 }
 function buildSrcSel(cur){return`<div class="src-sel"><button class="src-btn ${cur==="wc"?"on":""}" data-src="wc">Weather Co.</button><button class="src-btn ${cur==="om"?"on":""}" data-src="om">Open-Meteo</button></div>`}
 
-const TB=["ahora","ayer","prev","mar","est"];
+const TB=["ahora","ayer","prev","est"];
 function stab(id){document.querySelectorAll(".tabs button").forEach((b,i)=>b.classList.toggle("on",TB[i]===id));TB.forEach(t=>document.getElementById("t-"+t).classList.toggle("on",t===id));if(M){showMap(id==="est");if(id==="est"&&M._stBounds)setTimeout(()=>M.fitBounds(M._stBounds.pad(.15)),150)}
 if(id==="ayer"&&window._yHourly)setTimeout(()=>drawTempChart("chart-yesterday",window._yHourly),100);
 if(id==="ahora"&&window._todayHourly)setTimeout(()=>drawTempChart("chart-today",window._todayHourly,window._todayForecast),100)}
@@ -517,15 +515,12 @@ async function go(name,lat,lon){
     const todayForecast = new Array(24).fill(null);
 
     // TAB AHORA
-    document.getElementById("t-ahora").innerHTML=`${alertHtml}<div class="hero"><div class="hero-temp" style="color:${tc(aT)}">${aT!=null?aT.toFixed(1):"--"}°</div><div class="hero-sub" style="color:${cf.c}">${cf.t}</div><div class="hero-mm">Min <b style="color:${tc(mnT)}">${mnT!=null?mnT.toFixed(1):"--"}°</b> · Max <b style="color:${tc(mxT)}">${mxT!=null?mxT.toFixed(1):"--"}°</b></div></div>${fcB}<div class="card"><div class="ct ct-b">Temperatura hoy por horas</div><button onclick="loadTodayChart()" id="btn-chart-today" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--bg2);color:var(--accent);cursor:pointer;font-size:13px;font-weight:600">Cargar gráfica</button><div id="chart-today-wrap" style="display:none"><div style="display:flex;gap:14px;font-size:10px;color:var(--text2);margin-bottom:6px"><span><span style="color:#3b82f6">━</span> Observado</span><span><span style="color:#f59e0b">╌</span> Previsión</span></div><div class="temp-chart"><canvas id="chart-today"></canvas></div></div></div><div class="card"><div class="g3"><div class="m"><div class="v">${aH!=null?aH.toFixed(0):"--"}%</div><div class="l">Humedad</div></div><div class="m"><div class="v">${aW!=null?aW.toFixed(1):"--"}<small> km/h</small></div><div class="l">${wa(aDir)} ${wl(aDir)} Viento</div></div><div class="m"><div class="v">${aG!=null?aG.toFixed(1):"--"}<small> km/h</small></div><div class="l">Racha max</div></div><div class="m"><div class="v">${aPr!=null?aPr.toFixed(1):"--"}<small> mm</small></div><div class="l">Precipitacion</div></div><div class="m"><div class="v">${aP!=null?aP.toFixed(1):"--"}</div><div class="l">Presion hPa</div></div><div class="m"><div class="v">${aD!=null?aD.toFixed(1):"--"}°</div><div class="l">Pto. rocio</div></div></div></div><div class="card"><div class="g3"><div class="m"><div class="v" style="color:${uv2.c}">${aUV!=null?aUV.toFixed(1):"--"}</div><div class="l">UV ${uv2.t}</div></div><div class="m"><div class="v">${aSr!=null?aSr.toFixed(0):"--"}<small> W/m²</small></div><div class="l">Radiacion</div></div><div class="m"><div class="v">${vl.length}</div><div class="l">Estaciones</div></div></div></div>`;
+    document.getElementById("t-ahora").innerHTML=`${alertHtml}<div class="hero"><div class="hero-temp" style="color:${tc(aT)}">${aT!=null?aT.toFixed(1):"--"}°</div><div class="hero-sub" style="color:${cf.c}">${cf.t}</div><div class="hero-mm">Min <b style="color:${tc(mnT)}">${mnT!=null?mnT.toFixed(1):"--"}°</b> · Max <b style="color:${tc(mxT)}">${mxT!=null?mxT.toFixed(1):"--"}°</b></div></div>${fcB}<div class="card"><div class="ct ct-b">Temperatura hoy por horas</div><button onclick="loadTodayChart()" id="btn-chart-today" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--bg2);color:var(--accent);cursor:pointer;font-size:13px;font-weight:600">Cargar gráfica</button><div id="chart-today-wrap" style="display:none"><div style="display:flex;gap:14px;font-size:10px;color:var(--text2);margin-bottom:6px"><span><span style="color:#3b82f6">━</span> Observado</span><span><span style="color:#f59e0b">╌</span> Previsión</span></div><div class="temp-chart"><canvas id="chart-today"></canvas></div></div></div><div class="card"><div class="g3"><div class="m"><div class="v">${aH!=null?aH.toFixed(0):"--"}%</div><div class="l">Humedad</div></div><div class="m"><div class="v">${aW!=null?aW.toFixed(1):"--"}<small> km/h</small></div><div class="l">${wa(aDir)} ${wl(aDir)} Viento</div></div><div class="m"><div class="v">${aG!=null?aG.toFixed(1):"--"}<small> km/h</small></div><div class="l">Racha max</div></div><div class="m"><div class="v">${aPr!=null?aPr.toFixed(1):"--"}<small> mm</small></div><div class="l">Precipitacion</div></div><div class="m"><div class="v">${aP!=null?aP.toFixed(1):"--"}</div><div class="l">Presion hPa</div></div><div class="m"><div class="v">${aD!=null?aD.toFixed(1):"--"}°</div><div class="l">Pto. rocio</div></div></div></div><div class="card"><div class="g3"><div class="m"><div class="v" style="color:${uv2.c}">${aUV!=null?aUV.toFixed(1):"--"}</div><div class="l">UV ${uv2.t}</div></div><div class="m"><div class="v">${aSr!=null?aSr.toFixed(0):"--"}<small> W/m²</small></div><div class="l">Radiacion</div></div><div class="m"><div class="v">${vl.length}</div><div class="l">Estaciones</div></div></div></div>${soH}${marH}${tH}`;
     window._todayHourly = todayHourly;
     window._todayForecast = todayForecast;
     window._chartStations = vl;
     window._chartLat = lat;
     window._chartLon = lon;
-
-    // TAB LUNA/MAREAS
-    document.getElementById("t-mar").innerHTML=(soH||tH||marH)?`${soH}${marH}${tH}`:`<div class="no-data">No hay informacion de mareas para este municipio (no es costero).</div>`;
 
     // TAB AYER (daily summary of yesterday)
     prog(68);const yDate=new Date();yDate.setDate(yDate.getDate()-1);const yStr=yDate.toISOString().slice(0,10).replace(/-/g,"");
