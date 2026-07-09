@@ -105,6 +105,11 @@ header h1 small{font-weight:400;color:rgba(255,255,255,.7);font-size:11px;displa
 
 .main-col{flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0}
 
+.est-toggle{display:flex;gap:6px;margin-bottom:12px}
+.est-tab{flex:1;padding:9px 4px;border:1px solid var(--border);border-radius:10px;background:var(--bg);color:var(--text2);font-size:13px;cursor:pointer;font-weight:500;transition:all .15s}
+.est-tab.on{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:600}
+@media(min-width:769px){.est-toggle{display:none}}
+
 #mapc{height:360px;flex-shrink:0;border-top:1px solid var(--border);display:none}
 #map{height:100%;width:100%}
 .no-data{text-align:center;padding:40px 16px;color:var(--text2);font-size:14px;line-height:1.6}
@@ -152,30 +157,16 @@ header h1 small{font-weight:400;color:rgba(255,255,255,.7);font-size:11px;displa
 <script>
 if("serviceWorker"in navigator)navigator.serviceWorker.register("sw.js").catch(()=>{});
 const AK="e1f10a1e78da46f5b10a1e78da96f525",WB="https://api.weather.com",IB="https://ideihm.covam.es/api-ihm/getmarea",OK="ce0a096cf16d15d2a2c9f21ac0b810e7";
-let ports=null,M=null,ML=null,HD=null,_lc=null;
+let ports=null,M=null,ML=null,HD=null;
 
 function initMap(){if(M)return;M=L.map("map").setView([39.5,-3],6);
 const voyager=L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",{attribution:'&copy; <a href="https://carto.com">CARTO</a>',maxZoom:19});
 const positron=L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",{attribution:'&copy; <a href="https://carto.com">CARTO</a>',maxZoom:19});
 const dark=L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",{attribution:'&copy; <a href="https://carto.com">CARTO</a>',maxZoom:19});
 const pnoa=L.tileLayer("https://www.ign.es/wmts/pnoa-ma?layer=OI.OrthoimageCoverage&style=default&tilematrixset=GoogleMapsCompatible&Service=WMTS&Request=GetTile&Version=1.0.0&format=image/jpeg&TileMatrix={z}&TileRow={y}&TileCol={x}",{attribution:"PNOA &copy; IGN",maxZoom:19});
-const owmTile=l=>`https://tile.openweathermap.org/map/${l}/{z}/{x}/{y}.png?appid=${OK}`;
-const owmOpts={opacity:.7,maxZoom:19,attribution:'&copy; <a href="https://openweathermap.org">OWM</a>'};
 voyager.addTo(M);
-_lc=L.control.layers(
-  {"Voyager":voyager,"Positron":positron,"Oscuro":dark,"Satélite":pnoa},
-  {"💨 Viento (OWM)":L.tileLayer(owmTile("wind_new"),owmOpts),"🌡 Temperatura (OWM)":L.tileLayer(owmTile("temp_new"),owmOpts),"☁️ Nubes (OWM)":L.tileLayer(owmTile("clouds_new"),owmOpts)},
-  {collapsed:true}
-).addTo(M);
-ML=L.layerGroup().addTo(M);
-fetch("https://api.rainviewer.com/public/weather-maps.json")
-  .then(r=>r.json())
-  .then(d=>{const p=d.radar?.past?.slice(-1)[0]?.path;if(!p)return;
-    _lc.addOverlay(L.tileLayer(`https://tilecache.rainviewer.com${p}/256/{z}/{x}/{y}/4/1_1.png`,
-      {opacity:.75,maxZoom:18,attribution:'&copy; <a href="https://rainviewer.com">RainViewer</a>'}),
-    "🛰 Radar (RainViewer)")})
-  .catch(()=>{})
-}
+L.control.layers({"Voyager":voyager,"Positron":positron,"Oscuro":dark,"Satélite":pnoa},{},{collapsed:true}).addTo(M);
+ML=L.layerGroup().addTo(M)}
 function showMap(v){document.getElementById("mapc").style.display=v?"block":"none";if(M&&v)setTimeout(()=>M.invalidateSize(),100)}
 
 (async()=>{try{const r=await fetch(`${IB}?request=getlist&format=json`);if(r.ok){const d=await r.json();ports=d.estaciones?.puertos||[]}}catch{}})();
@@ -423,7 +414,21 @@ async function loadForecast(src){
 function buildSrcSel(cur){return`<div class="src-sel"><button class="src-btn ${cur==="wc"?"on":""}" data-src="wc">Weather Co.</button><button class="src-btn ${cur==="om"?"on":""}" data-src="om">Open-Meteo</button></div>`}
 
 const TB=["ahora","ayer","prev","est"];
-function stab(id){document.querySelectorAll(".tabs button").forEach((b,i)=>b.classList.toggle("on",TB[i]===id));TB.forEach(t=>document.getElementById("t-"+t).classList.toggle("on",t===id));if(M){showMap(id==="est");if(id==="est"&&M._stBounds)setTimeout(()=>M.fitBounds(M._stBounds.pad(.15)),150)}
+function setEstView(v){
+  document.querySelectorAll('.est-tab').forEach(b=>b.classList.toggle('on',b.dataset.v===v));
+  const mc=document.querySelector('.main-col'),cont=document.getElementById('content'),mapc=document.getElementById('mapc');
+  if(v==='mapa'){
+    mc.style.flex='none';cont.style.display='none';
+    mapc.style.flex='1';mapc.style.height='auto';showMap(true);
+    setTimeout(()=>{M.invalidateSize();if(M._stBounds)M.fitBounds(M._stBounds.pad(.15))},120);
+  }else{
+    mc.style.flex='';cont.style.display='';mapc.style.flex='';mapc.style.height='';showMap(false);
+  }
+}
+function stab(id){document.querySelectorAll(".tabs button").forEach((b,i)=>b.classList.toggle("on",TB[i]===id));TB.forEach(t=>document.getElementById("t-"+t).classList.toggle("on",t===id));
+  if(id!=="est"&&window.innerWidth<769){const mc=document.querySelector('.main-col'),cont=document.getElementById('content');mc.style.flex='';cont.style.display='';}
+  const desktop=window.innerWidth>=769;
+  if(M){showMap(id==="est"&&desktop);if(id==="est"&&desktop&&M._stBounds)setTimeout(()=>M.fitBounds(M._stBounds.pad(.15)),150)}
 if(id==="ayer"&&window._yHourly)setTimeout(()=>drawTempChart("chart-yesterday",window._yHourly),100);
 if(id==="ahora"&&window._todayHourly)setTimeout(()=>drawTempChart("chart-today",window._todayHourly,window._todayForecast),100)}
 
@@ -599,7 +604,7 @@ async function go(name,lat,lon){
     await loadForecast("wc");
 
     // TAB ESTACIONES
-    prog(95);let sH=`<table id="ctab"><tr><th>ID</th><th>Temp</th><th>Hum</th><th>Viento</th><th>Precip</th><th>Pres</th></tr>`;
+    prog(95);let sH=`<div class="est-toggle"><button class="est-tab on" data-v="lista" onclick="setEstView('lista')">📋 Lista</button><button class="est-tab" data-v="mapa" onclick="setEstView('mapa')">🗺 Mapa</button></div><table id="ctab"><tr><th>ID</th><th>Temp</th><th>Hum</th><th>Viento</th><th>Precip</th><th>Pres</th></tr>`;
     obs.forEach(({s:st,o})=>{const m2=o?.metric;if(!m2)return;sH+=`<tr><td style="text-align:left;color:var(--accent)">${st.id}</td><td style="color:${tc(m2.temp)};font-weight:700">${m2.temp}°</td><td>${o.humidity}%</td><td>${m2.windSpeed} ${wl(o.winddir)}</td><td>${m2.precipTotal}</td><td>${m2.pressure}</td></tr>`});sH+=`</table>`;
     obs.forEach(({s:st,o})=>{const m2=o?.metric;if(!m2)return;sH+=`<div class="sc" onclick="M.setView([${st.lat},${st.lon}],15)"><div class="sc-r"><div><div class="sc-id">${st.id} <a href="https://www.wunderground.com/dashboard/pws/${st.id}" target="_blank" onclick="event.stopPropagation()" style="font-size:10px;color:var(--text2);text-decoration:none">↗ ver ficha</a></div><div class="sc-h">${o.neighborhood||st.name} · ${st.dist.toFixed(1)} km · ${ta(o.obsTimeUtc)}</div></div><div class="sc-t" style="color:${tc(m2.temp)}">${m2.temp}°</div></div><div class="sc-d"><span>💧${o.humidity}%</span><span>💨${m2.windSpeed} ${wl(o.winddir)}</span><span>🌧️${m2.precipTotal} mm</span><span>⏱️${m2.pressure}</span>${o.uv!=null?`<span style="color:${ul(o.uv).c}">☀️UV ${o.uv}</span>`:""}</div></div>`});
     document.getElementById("t-est").innerHTML=sH;
