@@ -105,10 +105,10 @@ header h1 small{font-weight:400;color:rgba(255,255,255,.7);font-size:11px;displa
 
 .main-col{flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0}
 
-.est-toggle{display:flex;gap:6px;margin-bottom:12px}
-.est-tab{flex:1;padding:9px 4px;border:1px solid var(--border);border-radius:10px;background:var(--bg);color:var(--text2);font-size:13px;cursor:pointer;font-weight:500;transition:all .15s}
+#est-bar{display:none;gap:6px;padding:8px 16px;background:var(--bg2);border-bottom:1px solid var(--border);flex-shrink:0}
+.est-tab{flex:1;padding:8px 4px;border:1px solid var(--border);border-radius:10px;background:var(--bg);color:var(--text2);font-size:13px;cursor:pointer;font-weight:500;transition:all .15s}
 .est-tab.on{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:600}
-@media(min-width:769px){.est-toggle{display:none}}
+@media(min-width:769px){#est-bar{display:none!important}}
 
 #mapc{height:360px;flex-shrink:0;border-top:1px solid var(--border);display:none}
 #map{height:100%;width:100%}
@@ -144,6 +144,10 @@ header h1 small{font-weight:400;color:rgba(255,255,255,.7);font-size:11px;displa
   <button onclick="stab('ayer')"><i data-lucide="history"></i><span>Ayer</span></button>
   <button onclick="stab('prev')"><i data-lucide="cloud-sun"></i><span>Previsión</span></button>
   <button onclick="stab('est')"><i data-lucide="radio"></i><span>Estaciones</span></button>
+</div>
+<div id="est-bar">
+  <button class="est-tab on" data-v="lista" onclick="setEstView('lista')">📋 Lista</button>
+  <button class="est-tab" data-v="mapa" onclick="setEstView('mapa')">🗺 Mapa</button>
 </div>
 <div id="content">
   <div id="t-ahora" class="tv on"><div class="no-data">Busque un municipio o pulse &#9737;<br>para ver el tiempo en su ubicacion</div></div>
@@ -422,12 +426,14 @@ function setEstView(v){
     mapc.style.flex='1';mapc.style.height='auto';showMap(true);
     setTimeout(()=>{M.invalidateSize();if(M._stBounds)M.fitBounds(M._stBounds.pad(.15))},120);
   }else{
-    mc.style.flex='';cont.style.display='';mapc.style.flex='';mapc.style.height='';showMap(false);
+    mc.style.flex='';cont.style.display='';mapc.style.flex='';mapc.style.height='360px';showMap(false);
   }
 }
 function stab(id){document.querySelectorAll(".tabs button").forEach((b,i)=>b.classList.toggle("on",TB[i]===id));TB.forEach(t=>document.getElementById("t-"+t).classList.toggle("on",t===id));
-  if(id!=="est"&&window.innerWidth<769){const mc=document.querySelector('.main-col'),cont=document.getElementById('content');mc.style.flex='';cont.style.display='';}
   const desktop=window.innerWidth>=769;
+  const bar=document.getElementById('est-bar');
+  if(bar)bar.style.display=(id==='est'&&!desktop)?'flex':'none';
+  if(id!=='est'){const mc=document.querySelector('.main-col'),cont=document.getElementById('content');mc.style.flex='';cont.style.display='';}
   if(M){showMap(id==="est"&&desktop);if(id==="est"&&desktop&&M._stBounds)setTimeout(()=>M.fitBounds(M._stBounds.pad(.15)),150)}
 if(id==="ayer"&&window._yHourly)setTimeout(()=>drawTempChart("chart-yesterday",window._yHourly),100);
 if(id==="ahora"&&window._todayHourly)setTimeout(()=>drawTempChart("chart-today",window._todayHourly,window._todayForecast),100)}
@@ -604,7 +610,7 @@ async function go(name,lat,lon){
     await loadForecast("wc");
 
     // TAB ESTACIONES
-    prog(95);let sH=`<div class="est-toggle"><button class="est-tab on" data-v="lista" onclick="setEstView('lista')">📋 Lista</button><button class="est-tab" data-v="mapa" onclick="setEstView('mapa')">🗺 Mapa</button></div><table id="ctab"><tr><th>ID</th><th>Temp</th><th>Hum</th><th>Viento</th><th>Precip</th><th>Pres</th></tr>`;
+    prog(95);let sH=`<table id="ctab"><tr><th>ID</th><th>Temp</th><th>Hum</th><th>Viento</th><th>Precip</th><th>Pres</th></tr>`;
     obs.forEach(({s:st,o})=>{const m2=o?.metric;if(!m2)return;sH+=`<tr><td style="text-align:left;color:var(--accent)">${st.id}</td><td style="color:${tc(m2.temp)};font-weight:700">${m2.temp}°</td><td>${o.humidity}%</td><td>${m2.windSpeed} ${wl(o.winddir)}</td><td>${m2.precipTotal}</td><td>${m2.pressure}</td></tr>`});sH+=`</table>`;
     obs.forEach(({s:st,o})=>{const m2=o?.metric;if(!m2)return;sH+=`<div class="sc" onclick="M.setView([${st.lat},${st.lon}],15)"><div class="sc-r"><div><div class="sc-id">${st.id} <a href="https://www.wunderground.com/dashboard/pws/${st.id}" target="_blank" onclick="event.stopPropagation()" style="font-size:10px;color:var(--text2);text-decoration:none">↗ ver ficha</a></div><div class="sc-h">${o.neighborhood||st.name} · ${st.dist.toFixed(1)} km · ${ta(o.obsTimeUtc)}</div></div><div class="sc-t" style="color:${tc(m2.temp)}">${m2.temp}°</div></div><div class="sc-d"><span>💧${o.humidity}%</span><span>💨${m2.windSpeed} ${wl(o.winddir)}</span><span>🌧️${m2.precipTotal} mm</span><span>⏱️${m2.pressure}</span>${o.uv!=null?`<span style="color:${ul(o.uv).c}">☀️UV ${o.uv}</span>`:""}</div></div>`});
     document.getElementById("t-est").innerHTML=sH;
