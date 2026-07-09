@@ -151,7 +151,7 @@ header h1 small{font-weight:400;color:rgba(255,255,255,.7);font-size:11px;displa
 
 <script>
 if("serviceWorker"in navigator)navigator.serviceWorker.register("sw.js").catch(()=>{});
-const AK="e1f10a1e78da46f5b10a1e78da96f525",WB="https://api.weather.com",IB="https://ideihm.covam.es/api-ihm/getmarea";
+const AK="e1f10a1e78da46f5b10a1e78da96f525",WB="https://api.weather.com",IB="https://ideihm.covam.es/api-ihm/getmarea",OK="ce0a096cf16d15d2a2c9f21ac0b810e7";
 let ports=null,M=null,ML=null,HD=null;
 
 function initMap(){if(M)return;M=L.map("map").setView([39.5,-3],6);
@@ -160,7 +160,19 @@ const voyager=L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager
 const positron=L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",{attribution:'&copy; <a href="https://carto.com">CARTO</a>',maxZoom:19});
 const dark=L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",{attribution:'&copy; <a href="https://carto.com">CARTO</a>',maxZoom:19});
 const pnoa=L.tileLayer("https://www.ign.es/wmts/pnoa-ma?layer=OI.OrthoimageCoverage&style=default&tilematrixset=GoogleMapsCompatible&Service=WMTS&Request=GetTile&Version=1.0.0&format=image/jpeg&TileMatrix={z}&TileRow={y}&TileCol={x}",{attribution:"PNOA &copy; IGN",maxZoom:19});
-voyager.addTo(M);L.control.layers({"Voyager":voyager,"Positron":positron,"Oscuro":dark,"Satelite":pnoa}).addTo(M);ML=L.layerGroup().addTo(M)}
+const owmTile=l=>`https://tile.openweathermap.org/map/${l}/{z}/{x}/{y}.png?appid=${OK}`;
+const owmOpts={opacity:.7,maxZoom:19,attribution:'&copy; <a href="https://openweathermap.org">OWM</a>'};
+const owmPrec=L.tileLayer(owmTile("precipitation_new"),owmOpts);
+const owmWind=L.tileLayer(owmTile("wind_new"),owmOpts);
+const owmTemp=L.tileLayer(owmTile("temp_new"),owmOpts);
+const owmClouds=L.tileLayer(owmTile("clouds_new"),owmOpts);
+voyager.addTo(M);
+L.control.layers(
+  {"Voyager":voyager,"Positron":positron,"Oscuro":dark,"Satélite":pnoa},
+  {"🌧 Precipitación":owmPrec,"💨 Viento":owmWind,"🌡 Temperatura":owmTemp,"☁️ Nubes":owmClouds},
+  {collapsed:true}
+).addTo(M);
+ML=L.layerGroup().addTo(M)}
 function showMap(v){document.getElementById("mapc").style.display=v?"block":"none";if(M&&v)setTimeout(()=>M.invalidateSize(),100)}
 
 (async()=>{try{const r=await fetch(`${IB}?request=getlist&format=json`);if(r.ok){const d=await r.json();ports=d.estaciones?.puertos||[]}}catch{}})();
