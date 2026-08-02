@@ -452,12 +452,19 @@ function nearestAemetList(lat,lon,n){
 function buildHistSel(){
   const now=new Date(),y=now.getFullYear();
   const defY=now.getMonth()===0?y-1:y,defM=now.getMonth()===0?12:now.getMonth();
-  let yo="";for(let yy=y;yy>=1940;yy--)yo+=`<option value="${yy}"${yy===defY?" selected":""}>${yy}</option>`;
-  let mo="";MESES.forEach((m,i)=>mo+=`<option value="${i+1}"${i+1===defM?" selected":""}>${m}</option>`);
-  return `<div class="card"><div class="ct ct-b">Consultar mes</div>
+  const selSty="padding:8px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);font-size:13px";
+  function years(){let o="";for(let yy=y;yy>=1940;yy--)o+=`<option value="${yy}"${yy===defY?" selected":""}>${yy}</option>`;return o}
+  function months(){let o="";MESES.forEach((m,i)=>o+=`<option value="${i+1}"${i+1===defM?" selected":""}>${m}</option>`);return o}
+  return `<div class="card"><div class="ct ct-b">Consultar periodo</div>
+    <div style="font-size:11px;color:var(--text2);margin-bottom:4px">Desde</div>
     <div class="g2" style="margin-bottom:10px">
-      <select id="hist-mes" style="padding:8px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);font-size:13px">${mo}</select>
-      <select id="hist-ano" style="padding:8px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);font-size:13px">${yo}</select>
+      <select id="hist-mes1" style="${selSty}">${months()}</select>
+      <select id="hist-ano1" style="${selSty}">${years()}</select>
+    </div>
+    <div style="font-size:11px;color:var(--text2);margin-bottom:4px">Hasta</div>
+    <div class="g2" style="margin-bottom:10px">
+      <select id="hist-mes2" style="${selSty}">${months()}</select>
+      <select id="hist-ano2" style="${selSty}">${years()}</select>
     </div>
     <button onclick="loadHist()" style="width:100%;padding:10px;border:none;border-radius:8px;background:var(--accent);color:#fff;font-weight:600;cursor:pointer;font-size:13px">Consultar</button>
   </div><div id="hist-result"></div>`;
@@ -465,9 +472,18 @@ function buildHistSel(){
 
 function initHist(){const t=document.getElementById("t-hist");if(!t.innerHTML)t.innerHTML=buildHistSel()}
 
+function mesCorto(fecha){const[yy,mm]=fecha.split("-").map(Number);return MESES[mm-1].slice(0,3)+" "+yy}
+function parseNum(v){if(v==null)return null;const m=v.match(/-?\d+\.?\d*/);return m?parseFloat(m[0]):null}
+const fmtT=v=>v!=null?v.replace(".",",")+"°":"-";
+const fmtV=(v,u)=>v!=null?v.replace(".",",")+(u||""):"-";
+
 async function loadHist(){
   const res=document.getElementById("hist-result");
-  const mes=+document.getElementById("hist-mes").value,ano=+document.getElementById("hist-ano").value;
+  const m1=+document.getElementById("hist-mes1").value,y1=+document.getElementById("hist-ano1").value;
+  const m2=+document.getElementById("hist-mes2").value,y2=+document.getElementById("hist-ano2").value;
+  const start=y1*12+m1,end=y2*12+m2;
+  if(start>end){res.innerHTML=`<div class="no-data">El mes "Desde" debe ser anterior (o igual) a "Hasta".</div>`;return}
+  const nMonths=end-start+1;
   res.innerHTML=`<div class="no-data">Cargando...</div>`;
   try{
     if(!lastLat&&!lastLon){res.innerHTML=`<div class="no-data">Busque antes un municipio.</div>`;return}
@@ -477,46 +493,97 @@ async function loadHist(){
       aemetLastLoc={lat:lastLat,lon:lastLon};aemetLastGood=null;
     }
     const order=aemetLastGood?[aemetLastGood,...aemetCandidates.filter(c=>c.id!==aemetLastGood.id)]:aemetCandidates;
-    let rec=null,st=null;
+    let bestRows=null,bestSt=null,bestCov=-1;
     for(const cand of order){
       try{
-        const meta=await fetchAemetJson(`${AEB}/mensualesanuales/datos/anioini/${ano}/aniofin/${ano}/estacion/${cand.id}?api_key=${AEK}`);
+        const meta=await fetchAemetJson(`${AEB}/mensualesanuales/datos/anioini/${y1}/aniofin/${y2}/estacion/${cand.id}?api_key=${AEK}`);
         if(meta.estado!==200)continue;
         const rows=await fetchAemetJson(meta.datos);
-        const r2=rows.find(x=>x.fecha===`${ano}-${mes}`);
-        if(r2&&Object.keys(r2).length>2){rec=r2;st=cand;aemetLastGood=cand;break}
+        const months=rows.filter(r=>{
+          const[yy,mm]=r.fecha.split("-").map(Number);
+          if(mm===13)return false;
+          const key=yy*12+mm;
+          return key>=start&&key<=end;
+        });
+        const cov=months.filter(r=>r.tm_mes!=null).length;
+        if(cov>bestCov){bestCov=cov;bestRows=months;bestSt=cand}
+        if(cov>=nMonths)break;
       }catch{}
     }
-    if(!rec){res.innerHTML=`<div class="no-data">Sin datos de AEMET para ${MESES[mes-1]} ${ano} en las estaciones cercanas a esta ubicación.</div>`;return}
-    const fmtT=v=>v!=null?v.replace(".",",")+"°":"-";
-    const fmtV=(v,u)=>v!=null?v.replace(".",",")+(u||""):"-";
-    res.innerHTML=`
-      <div class="card">
-        <div class="ct ct-b">${MESES[mes-1]} ${ano} — ${st.name} <span style="color:var(--text2);font-weight:400">(${st.dist.toFixed(0)} km)</span></div>
-        <div class="g3">
-          <div class="m"><div class="v" style="color:${tc(parseFloat(rec.tm_mes))}">${fmtT(rec.tm_mes)}</div><div class="l">Media</div></div>
-          <div class="m"><div class="v" style="color:${tc(parseFloat(rec.tm_max))}">${fmtT(rec.tm_max)}</div><div class="l">Med. máximas</div></div>
-          <div class="m"><div class="v" style="color:${tc(parseFloat(rec.tm_min))}">${fmtT(rec.tm_min)}</div><div class="l">Med. mínimas</div></div>
+    aemetLastGood=bestCov>=nMonths?bestSt:null;
+    if(!bestRows||bestCov===0){res.innerHTML=`<div class="no-data">Sin datos de AEMET para ese periodo en las estaciones cercanas a esta ubicación.</div>`;return}
+    bestRows.sort((a,b)=>{const[ya,ma]=a.fecha.split("-").map(Number),[yb,mb]=b.fecha.split("-").map(Number);return(ya*12+ma)-(yb*12+mb)});
+
+    if(nMonths===1){
+      const rec=bestRows[0];
+      if(!rec||Object.keys(rec).length<=2){res.innerHTML=`<div class="no-data">Sin datos para ${MESES[m1-1]} ${y1} en la estación ${bestSt.name}.</div>`;return}
+      res.innerHTML=`
+        <div class="card">
+          <div class="ct ct-b">${MESES[m1-1]} ${y1} — ${bestSt.name} <span style="color:var(--text2);font-weight:400">(${bestSt.dist.toFixed(0)} km)</span></div>
+          <div class="g3">
+            <div class="m"><div class="v" style="color:${tc(parseFloat(rec.tm_mes))}">${fmtT(rec.tm_mes)}</div><div class="l">Media</div></div>
+            <div class="m"><div class="v" style="color:${tc(parseFloat(rec.tm_max))}">${fmtT(rec.tm_max)}</div><div class="l">Med. máximas</div></div>
+            <div class="m"><div class="v" style="color:${tc(parseFloat(rec.tm_min))}">${fmtT(rec.tm_min)}</div><div class="l">Med. mínimas</div></div>
+          </div>
+          <div class="g2" style="margin-top:8px">
+            <div class="m"><div class="v">${rec.ta_max?rec.ta_max.replace(".",","):"-"}</div><div class="l">Máx. absoluta</div></div>
+            <div class="m"><div class="v">${rec.ta_min?rec.ta_min.replace(".",","):"-"}</div><div class="l">Mín. absoluta</div></div>
+          </div>
         </div>
-        <div class="g2" style="margin-top:8px">
-          <div class="m"><div class="v">${rec.ta_max?rec.ta_max.replace(".",","):"-"}</div><div class="l">Máx. absoluta</div></div>
-          <div class="m"><div class="v">${rec.ta_min?rec.ta_min.replace(".",","):"-"}</div><div class="l">Mín. absoluta</div></div>
+        <div class="card">
+          <div class="ct ct-c">Precipitación</div>
+          <div class="g3">
+            <div class="m"><div class="v">${fmtV(rec.p_mes," mm")}</div><div class="l">Acumulada</div></div>
+            <div class="m"><div class="v">${fmtV(rec.n_llu)}</div><div class="l">Días lluvia</div></div>
+            <div class="m"><div class="v">${rec.p_max?rec.p_max.split("(")[0].replace(".",",")+" mm":"-"}</div><div class="l">Máx. diaria</div></div>
+          </div>
         </div>
+        ${rec.hr||rec.w_med||rec.inso?`<div class="card"><div class="ct ct-o">Otros datos</div><div class="g3">
+          <div class="m"><div class="v">${fmtV(rec.hr,"%")}</div><div class="l">Hum. media</div></div>
+          <div class="m"><div class="v">${fmtV(rec.w_med," km/h")}</div><div class="l">Viento medio</div></div>
+          <div class="m"><div class="v">${fmtV(rec.inso," h")}</div><div class="l">Sol/día</div></div>
+        </div></div>`:""}
+      `;
+      return;
+    }
+
+    let sumP=0,cntP=0,sumT=0,cntT=0,absMax=-Infinity,absMaxRec=null,absMin=Infinity,absMinRec=null;
+    bestRows.forEach(r=>{
+      const p=parseNum(r.p_mes);if(p!=null){sumP+=p;cntP++}
+      const t=parseNum(r.tm_mes);if(t!=null){sumT+=t;cntT++}
+      const tx=parseNum(r.ta_max);if(tx!=null&&tx>absMax){absMax=tx;absMaxRec=r}
+      const tn=parseNum(r.ta_min);if(tn!=null&&tn<absMin){absMin=tn;absMinRec=r}
+    });
+    const avgT=cntT?sumT/cntT:null;
+    let html=`<div class="card">
+      <div class="ct ct-b">${MESES[m1-1]} ${y1} — ${MESES[m2-1]} ${y2} · ${bestSt.name} <span style="color:var(--text2);font-weight:400">(${bestSt.dist.toFixed(0)} km)</span></div>
+      <div class="g3">
+        <div class="m"><div class="v" style="color:${tc(avgT)}">${avgT!=null?avgT.toFixed(1).replace(".",",")+"°":"-"}</div><div class="l">Media periodo</div></div>
+        <div class="m"><div class="v">${absMaxRec?absMax.toFixed(1).replace(".",",")+"°":"-"}</div><div class="l">Máx. absoluta${absMaxRec?" ("+mesCorto(absMaxRec.fecha)+")":""}</div></div>
+        <div class="m"><div class="v">${absMinRec?absMin.toFixed(1).replace(".",",")+"°":"-"}</div><div class="l">Mín. absoluta${absMinRec?" ("+mesCorto(absMinRec.fecha)+")":""}</div></div>
       </div>
-      <div class="card">
-        <div class="ct ct-c">Precipitación</div>
-        <div class="g3">
-          <div class="m"><div class="v">${fmtV(rec.p_mes," mm")}</div><div class="l">Acumulada</div></div>
-          <div class="m"><div class="v">${fmtV(rec.n_llu)}</div><div class="l">Días lluvia</div></div>
-          <div class="m"><div class="v">${rec.p_max?rec.p_max.split("(")[0].replace(".",",")+" mm":"-"}</div><div class="l">Máx. diaria</div></div>
-        </div>
-      </div>
-      ${rec.hr||rec.w_med||rec.inso?`<div class="card"><div class="ct ct-o">Otros datos</div><div class="g3">
-        <div class="m"><div class="v">${fmtV(rec.hr,"%")}</div><div class="l">Hum. media</div></div>
-        <div class="m"><div class="v">${fmtV(rec.w_med," km/h")}</div><div class="l">Viento medio</div></div>
-        <div class="m"><div class="v">${fmtV(rec.inso," h")}</div><div class="l">Sol/día</div></div>
-      </div></div>`:""}
-    `;
+      <div class="m" style="margin-top:8px"><div class="v">${cntP?sumP.toFixed(1).replace(".",",")+" mm":"-"}</div><div class="l">Precipitación acumulada del periodo</div></div>
+    </div>
+    <div class="card" style="padding:0;overflow:hidden">
+      <table style="width:100%;border-collapse:collapse;font-size:11px">
+        <thead><tr style="background:var(--bg3)">
+          <th style="padding:8px 5px;text-align:left;color:var(--accent);position:sticky;top:0">Mes</th>
+          <th style="padding:8px 5px;color:var(--accent);position:sticky;top:0">Media</th>
+          <th style="padding:8px 5px;color:var(--accent);position:sticky;top:0">Máx</th>
+          <th style="padding:8px 5px;color:var(--accent);position:sticky;top:0">Mín</th>
+          <th style="padding:8px 5px;color:var(--accent);position:sticky;top:0">Precip.</th>
+        </tr></thead><tbody>`;
+    bestRows.forEach(r=>{
+      html+=`<tr style="border-bottom:1px solid var(--border)">
+        <td style="padding:6px 5px">${mesCorto(r.fecha)}</td>
+        <td style="padding:6px 5px;text-align:center">${fmtT(r.tm_mes)}</td>
+        <td style="padding:6px 5px;text-align:center">${fmtT(r.tm_max)}</td>
+        <td style="padding:6px 5px;text-align:center">${fmtT(r.tm_min)}</td>
+        <td style="padding:6px 5px;text-align:center">${fmtV(r.p_mes," mm")}</td>
+      </tr>`;
+    });
+    html+=`</tbody></table></div>`;
+    res.innerHTML=html;
   }catch(e){res.innerHTML=`<div class="no-data" style="color:#ef4444">Error: ${e.message}</div>`}
 }
 
