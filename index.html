@@ -165,7 +165,7 @@ if("serviceWorker"in navigator)navigator.serviceWorker.register("sw.js").catch((
 const AK="e1f10a1e78da46f5b10a1e78da96f525",WB="https://api.weather.com",IB="https://ideihm.covam.es/api-ihm/getmarea",OK="ce0a096cf16d15d2a2c9f21ac0b810e7";
 // AEMET OpenData: key emitida 2026-08-02 (cuenca87@gmail.com), caduca 2026-11-10 -> renovar en https://opendata.aemet.es/centrodedescargas/altaUsuario
 const AEK="eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJjdWVuY2E4N0BnbWFpbC5jb20iLCJqdGkiOiJiMDhmNTQ1ZS0zMDU5LTRkNjctYTcxMS0zYTc4NzI1ODg1MjgiLCJleHAiOjE3OTQzMjAxMzEsImlzcyI6IkFFTUVUIiwiaWF0IjoxNzg1NjgwMTMxLCJ1c2VySWQiOiJiMDhmNTQ1ZS0zMDU5LTRkNjctYTcxMS0zYTc4NzI1ODg1MjgiLCJyb2xlIjoiIn0.y6cR46MlBZ2SVG_v3gPqCk84Vkn0HMx_E9ojRSwSLRw",AEB="https://opendata.aemet.es/opendata/api/valores/climatologicos";
-let ports=null,M=null,ML=null,HD=null,aemetStations=null,aemetCandidates=null,aemetLastLoc=null,aemetLastGood=null;
+let ports=null,M=null,ML=null,HD=null,aemetStations=null,aemetCandidates=null,aemetLastLoc=null,aemetLastGood=null,aemetLastGoodDay=null;
 const MESES=["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
 
 function initMap(){if(M)return;M=L.map("map").setView([39.5,-3],6);
@@ -455,6 +455,9 @@ function buildHistSel(){
   const selSty="padding:8px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);font-size:13px";
   function years(){let o="";for(let yy=y;yy>=1940;yy--)o+=`<option value="${yy}"${yy===defY?" selected":""}>${yy}</option>`;return o}
   function months(){let o="";MESES.forEach((m,i)=>o+=`<option value="${i+1}"${i+1===defM?" selected":""}>${m}</option>`);return o}
+  const ymd=d=>d.toISOString().slice(0,10);
+  const defDayEnd=new Date(now);defDayEnd.setDate(defDayEnd.getDate()-5);
+  const defDayStart=new Date(defDayEnd);defDayStart.setDate(defDayStart.getDate()-6);
   return `<div class="card"><div class="ct ct-b">Consultar periodo</div>
     <div style="font-size:11px;color:var(--text2);margin-bottom:4px">Desde</div>
     <div class="g2" style="margin-bottom:10px">
@@ -467,7 +470,15 @@ function buildHistSel(){
       <select id="hist-ano2" style="${selSty}">${years()}</select>
     </div>
     <button onclick="loadHist()" style="width:100%;padding:10px;border:none;border-radius:8px;background:var(--accent);color:#fff;font-weight:600;cursor:pointer;font-size:13px">Consultar</button>
-  </div><div id="hist-result"></div>`;
+  </div><div id="hist-result"></div>
+  <div class="card" style="margin-top:10px"><div class="ct ct-c">Consultar días concretos</div>
+    <div style="font-size:11px;color:var(--text2);margin-bottom:4px">Desde</div>
+    <input type="date" id="hist-day1" value="${ymd(defDayStart)}" style="${selSty};width:100%;margin-bottom:8px">
+    <div style="font-size:11px;color:var(--text2);margin-bottom:4px">Hasta</div>
+    <input type="date" id="hist-day2" value="${ymd(defDayEnd)}" style="${selSty};width:100%;margin-bottom:10px">
+    <button onclick="loadHistDay()" style="width:100%;padding:10px;border:none;border-radius:8px;background:var(--accent);color:#fff;font-weight:600;cursor:pointer;font-size:13px">Consultar</button>
+    <div style="font-size:10px;color:var(--text2);margin-top:6px">AEMET publica los datos diarios con ~4 días de retraso; rango máximo 6 meses.</div>
+  </div><div id="hist-day-result"></div>`;
 }
 
 function initHist(){const t=document.getElementById("t-hist");if(!t.innerHTML)t.innerHTML=buildHistSel()}
@@ -580,6 +591,109 @@ async function loadHist(){
         <td style="padding:6px 5px;text-align:center">${fmtT(r.tm_max)}</td>
         <td style="padding:6px 5px;text-align:center">${fmtT(r.tm_min)}</td>
         <td style="padding:6px 5px;text-align:center">${fmtV(r.p_mes," mm")}</td>
+      </tr>`;
+    });
+    html+=`</tbody></table></div>`;
+    res.innerHTML=html;
+  }catch(e){res.innerHTML=`<div class="no-data" style="color:#ef4444">Error: ${e.message}</div>`}
+}
+
+const parseC=v=>{if(v==null)return null;const n=parseFloat(v.replace(",","."));return isNaN(n)?null:n};
+const fmtC=(v,u)=>v!=null?v+(u||""):"-";
+
+async function loadHistDay(){
+  const res=document.getElementById("hist-day-result");
+  const d1s=document.getElementById("hist-day1").value,d2s=document.getElementById("hist-day2").value;
+  if(!d1s||!d2s){res.innerHTML=`<div class="no-data">Selecciona ambas fechas.</div>`;return}
+  if(d1s>d2s){res.innerHTML=`<div class="no-data">La fecha "Desde" debe ser anterior (o igual) a "Hasta".</div>`;return}
+  const nDays=Math.round((new Date(d2s)-new Date(d1s))/86400000)+1;
+  if(nDays>183){res.innerHTML=`<div class="no-data">AEMET limita las consultas diarias a un máximo de 6 meses. Acorta el rango.</div>`;return}
+  res.innerHTML=`<div class="no-data">Cargando...</div>`;
+  try{
+    if(!lastLat&&!lastLon){res.innerHTML=`<div class="no-data">Busque antes un municipio.</div>`;return}
+    await loadAemetStations();
+    if(!aemetCandidates||aemetLastLoc?.lat!==lastLat||aemetLastLoc?.lon!==lastLon){
+      aemetCandidates=nearestAemetList(lastLat,lastLon,8);
+      aemetLastLoc={lat:lastLat,lon:lastLon};aemetLastGood=null;aemetLastGoodDay=null;
+    }
+    const order=aemetLastGoodDay?[aemetLastGoodDay,...aemetCandidates.filter(c=>c.id!==aemetLastGoodDay.id)]:aemetCandidates;
+    let bestRows=null,bestSt=null,bestCov=-1;
+    for(const cand of order){
+      try{
+        const meta=await fetchAemetJson(`${AEB}/diarios/datos/fechaini/${d1s}T00:00:00UTC/fechafin/${d2s}T00:00:00UTC/estacion/${cand.id}?api_key=${AEK}`);
+        if(meta.estado!==200)continue;
+        const rows=await fetchAemetJson(meta.datos);
+        const cov=rows.filter(r=>r.tmed!=null).length;
+        if(cov>bestCov){bestCov=cov;bestRows=rows;bestSt=cand}
+        if(cov>=nDays)break;
+      }catch{}
+    }
+    aemetLastGoodDay=bestCov>=nDays?bestSt:null;
+    if(!bestRows||bestCov===0){res.innerHTML=`<div class="no-data">Sin datos de AEMET para ese rango de días en las estaciones cercanas a esta ubicación (recuerda el retraso de ~4 días).</div>`;return}
+    bestRows.sort((a,b)=>a.fecha.localeCompare(b.fecha));
+
+    if(nDays===1){
+      const rec=bestRows[0];
+      if(!rec||rec.tmed==null){res.innerHTML=`<div class="no-data">Sin datos para ${d1s} en la estación ${bestSt.name}.</div>`;return}
+      res.innerHTML=`
+        <div class="card">
+          <div class="ct ct-b">${d1s} — ${bestSt.name} <span style="color:var(--text2);font-weight:400">(${bestSt.dist.toFixed(0)} km)</span></div>
+          <div class="g3">
+            <div class="m"><div class="v" style="color:${tc(parseC(rec.tmed))}">${fmtC(rec.tmed,"°")}</div><div class="l">Media</div></div>
+            <div class="m"><div class="v" style="color:${tc(parseC(rec.tmax))}">${fmtC(rec.tmax,"°")}</div><div class="l">Máxima${rec.horatmax?" ("+rec.horatmax+")":""}</div></div>
+            <div class="m"><div class="v" style="color:${tc(parseC(rec.tmin))}">${fmtC(rec.tmin,"°")}</div><div class="l">Mínima${rec.horatmin?" ("+rec.horatmin+")":""}</div></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="ct ct-c">Precipitación y viento</div>
+          <div class="g3">
+            <div class="m"><div class="v">${fmtC(rec.prec," mm")}</div><div class="l">Precipitación</div></div>
+            <div class="m"><div class="v">${fmtC(rec.velmedia," km/h")}</div><div class="l">Viento medio</div></div>
+            <div class="m"><div class="v">${fmtC(rec.racha," km/h")}</div><div class="l">Racha máx.${rec.horaracha?" ("+rec.horaracha+")":""}</div></div>
+          </div>
+        </div>
+        ${rec.sol||rec.hrMedia?`<div class="card"><div class="ct ct-o">Otros datos</div><div class="g3">
+          <div class="m"><div class="v">${fmtC(rec.sol," h")}</div><div class="l">Sol</div></div>
+          <div class="m"><div class="v">${fmtC(rec.hrMedia,"%")}</div><div class="l">Hum. media</div></div>
+          <div class="m"><div class="v">${fmtC(rec.presMax," hPa")}</div><div class="l">Presión máx.</div></div>
+        </div></div>`:""}
+      `;
+      return;
+    }
+
+    let sumP=0,cntP=0,sumT=0,cntT=0,absMax=-Infinity,absMaxRec=null,absMin=Infinity,absMinRec=null;
+    bestRows.forEach(r=>{
+      const p=parseC(r.prec);if(p!=null){sumP+=p;cntP++}
+      const t=parseC(r.tmed);if(t!=null){sumT+=t;cntT++}
+      const tx=parseC(r.tmax);if(tx!=null&&tx>absMax){absMax=tx;absMaxRec=r}
+      const tn=parseC(r.tmin);if(tn!=null&&tn<absMin){absMin=tn;absMinRec=r}
+    });
+    const avgT=cntT?sumT/cntT:null;
+    let html=`<div class="card">
+      <div class="ct ct-b">${d1s} — ${d2s} · ${bestSt.name} <span style="color:var(--text2);font-weight:400">(${bestSt.dist.toFixed(0)} km)</span></div>
+      <div class="g3">
+        <div class="m"><div class="v" style="color:${tc(avgT)}">${avgT!=null?avgT.toFixed(1).replace(".",",")+"°":"-"}</div><div class="l">Media periodo</div></div>
+        <div class="m"><div class="v">${absMaxRec?String(absMax).replace(".",",")+"°":"-"}</div><div class="l">Máxima${absMaxRec?" ("+absMaxRec.fecha+")":""}</div></div>
+        <div class="m"><div class="v">${absMinRec?String(absMin).replace(".",",")+"°":"-"}</div><div class="l">Mínima${absMinRec?" ("+absMinRec.fecha+")":""}</div></div>
+      </div>
+      <div class="m" style="margin-top:8px"><div class="v">${cntP?sumP.toFixed(1).replace(".",",")+" mm":"-"}</div><div class="l">Precipitación acumulada del periodo</div></div>
+    </div>
+    <div class="card" style="padding:0;overflow:hidden;max-height:340px;overflow-y:auto">
+      <table style="width:100%;border-collapse:collapse;font-size:11px">
+        <thead><tr style="background:var(--bg3)">
+          <th style="padding:8px 5px;text-align:left;color:var(--accent);position:sticky;top:0;background:var(--bg3)">Día</th>
+          <th style="padding:8px 5px;color:var(--accent);position:sticky;top:0;background:var(--bg3)">Media</th>
+          <th style="padding:8px 5px;color:var(--accent);position:sticky;top:0;background:var(--bg3)">Máx</th>
+          <th style="padding:8px 5px;color:var(--accent);position:sticky;top:0;background:var(--bg3)">Mín</th>
+          <th style="padding:8px 5px;color:var(--accent);position:sticky;top:0;background:var(--bg3)">Precip.</th>
+        </tr></thead><tbody>`;
+    bestRows.forEach(r=>{
+      html+=`<tr style="border-bottom:1px solid var(--border)">
+        <td style="padding:6px 5px">${r.fecha.slice(8,10)}/${r.fecha.slice(5,7)}</td>
+        <td style="padding:6px 5px;text-align:center">${fmtC(r.tmed,"°")}</td>
+        <td style="padding:6px 5px;text-align:center">${fmtC(r.tmax,"°")}</td>
+        <td style="padding:6px 5px;text-align:center">${fmtC(r.tmin,"°")}</td>
+        <td style="padding:6px 5px;text-align:center">${fmtC(r.prec," mm")}</td>
       </tr>`;
     });
     html+=`</tbody></table></div>`;
