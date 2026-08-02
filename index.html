@@ -144,6 +144,7 @@ header h1 small{font-weight:400;color:rgba(255,255,255,.7);font-size:11px;displa
   <button onclick="stab('ayer')"><i data-lucide="history"></i><span>Ayer</span></button>
   <button onclick="stab('prev')"><i data-lucide="cloud-sun"></i><span>Previsión</span></button>
   <button onclick="stab('est')"><i data-lucide="radio"></i><span>Estaciones</span></button>
+  <button onclick="stab('hist')"><i data-lucide="calendar-days"></i><span>Histórico</span></button>
 </div>
 <div id="est-bar">
   <button class="est-tab on" data-v="lista" onclick="setEstView('lista')">📋 Lista</button>
@@ -154,6 +155,7 @@ header h1 small{font-weight:400;color:rgba(255,255,255,.7);font-size:11px;displa
   <div id="t-ayer" class="tv"></div>
   <div id="t-prev" class="tv"></div>
   <div id="t-est" class="tv"></div>
+  <div id="t-hist" class="tv"></div>
 </div>
 </div>
 <div id="mapc"><div id="map"></div></div>
@@ -161,7 +163,10 @@ header h1 small{font-weight:400;color:rgba(255,255,255,.7);font-size:11px;displa
 <script>
 if("serviceWorker"in navigator)navigator.serviceWorker.register("sw.js").catch(()=>{});
 const AK="e1f10a1e78da46f5b10a1e78da96f525",WB="https://api.weather.com",IB="https://ideihm.covam.es/api-ihm/getmarea",OK="ce0a096cf16d15d2a2c9f21ac0b810e7";
-let ports=null,M=null,ML=null,HD=null;
+// AEMET OpenData: key emitida 2026-08-02 (cuenca87@gmail.com), caduca 2026-11-10 -> renovar en https://opendata.aemet.es/centrodedescargas/altaUsuario
+const AEK="eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJjdWVuY2E4N0BnbWFpbC5jb20iLCJqdGkiOiJiMDhmNTQ1ZS0zMDU5LTRkNjctYTcxMS0zYTc4NzI1ODg1MjgiLCJleHAiOjE3OTQzMjAxMzEsImlzcyI6IkFFTUVUIiwiaWF0IjoxNzg1NjgwMTMxLCJ1c2VySWQiOiJiMDhmNTQ1ZS0zMDU5LTRkNjctYTcxMS0zYTc4NzI1ODg1MjgiLCJyb2xlIjoiIn0.y6cR46MlBZ2SVG_v3gPqCk84Vkn0HMx_E9ojRSwSLRw",AEB="https://opendata.aemet.es/opendata/api/valores/climatologicos";
+let ports=null,M=null,ML=null,HD=null,aemetStations=null,aemetCandidates=null,aemetLastLoc=null,aemetLastGood=null;
+const MESES=["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
 
 function initMap(){if(M)return;M=L.map("map").setView([39.5,-3],6);
 const voyager=L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",{attribution:'&copy; <a href="https://carto.com">CARTO</a>',maxZoom:19});
@@ -417,7 +422,105 @@ async function loadForecast(src){
 }
 function buildSrcSel(cur){return`<div class="src-sel"><button class="src-btn ${cur==="wc"?"on":""}" data-src="wc">Weather Co.</button><button class="src-btn ${cur==="om"?"on":""}" data-src="om">Open-Meteo</button></div>`}
 
-const TB=["ahora","ayer","prev","est"];
+function dms2dec(s){const h=s.slice(-1),digs=s.slice(0,-1);const ss=parseInt(digs.slice(-2)),mm=parseInt(digs.slice(-4,-2)),dd=parseInt(digs.slice(0,-4));let dec=dd+mm/60+ss/3600;if(h==="S"||h==="W")dec=-dec;return dec}
+
+// AEMET sirve JSON en ISO-8859-15; fetch().json() decodifica siempre como UTF-8 e ignora el charset, asi que hay que decodificar los bytes a mano
+async function fetchAemetJson(url){
+  const r=await fetch(url);
+  if(!r.ok)throw new Error("Error API AEMET");
+  const buf=await r.arrayBuffer();
+  return JSON.parse(new TextDecoder("iso-8859-15").decode(buf));
+}
+
+async function loadAemetStations(){
+  if(aemetStations)return aemetStations;
+  const cached=localStorage.getItem("aemetStations");
+  if(cached){try{aemetStations=JSON.parse(cached);return aemetStations}catch{}}
+  const meta=await fetchAemetJson(`${AEB}/inventarioestaciones/todasestaciones?api_key=${AEK}`);
+  if(meta.estado!==200)throw new Error(meta.descripcion||"Error AEMET");
+  const list=await fetchAemetJson(meta.datos);
+  aemetStations=list.map(s=>({id:s.indicativo,name:s.nombre,lat:dms2dec(s.latitud),lon:dms2dec(s.longitud)}));
+  try{localStorage.setItem("aemetStations",JSON.stringify(aemetStations))}catch{}
+  return aemetStations;
+}
+
+function nearestAemetList(lat,lon,n){
+  return aemetStations.map(s=>({...s,dist:Math.sqrt((s.lat-lat)**2+((s.lon-lon)*Math.cos(lat*Math.PI/180))**2)*111.32}))
+    .sort((a,b)=>a.dist-b.dist).slice(0,n);
+}
+
+function buildHistSel(){
+  const now=new Date(),y=now.getFullYear();
+  const defY=now.getMonth()===0?y-1:y,defM=now.getMonth()===0?12:now.getMonth();
+  let yo="";for(let yy=y;yy>=1940;yy--)yo+=`<option value="${yy}"${yy===defY?" selected":""}>${yy}</option>`;
+  let mo="";MESES.forEach((m,i)=>mo+=`<option value="${i+1}"${i+1===defM?" selected":""}>${m}</option>`);
+  return `<div class="card"><div class="ct ct-b">Consultar mes</div>
+    <div class="g2" style="margin-bottom:10px">
+      <select id="hist-mes" style="padding:8px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);font-size:13px">${mo}</select>
+      <select id="hist-ano" style="padding:8px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);font-size:13px">${yo}</select>
+    </div>
+    <button onclick="loadHist()" style="width:100%;padding:10px;border:none;border-radius:8px;background:var(--accent);color:#fff;font-weight:600;cursor:pointer;font-size:13px">Consultar</button>
+  </div><div id="hist-result"></div>`;
+}
+
+function initHist(){const t=document.getElementById("t-hist");if(!t.innerHTML)t.innerHTML=buildHistSel()}
+
+async function loadHist(){
+  const res=document.getElementById("hist-result");
+  const mes=+document.getElementById("hist-mes").value,ano=+document.getElementById("hist-ano").value;
+  res.innerHTML=`<div class="no-data">Cargando...</div>`;
+  try{
+    if(!lastLat&&!lastLon){res.innerHTML=`<div class="no-data">Busque antes un municipio.</div>`;return}
+    await loadAemetStations();
+    if(!aemetCandidates||aemetLastLoc?.lat!==lastLat||aemetLastLoc?.lon!==lastLon){
+      aemetCandidates=nearestAemetList(lastLat,lastLon,8);
+      aemetLastLoc={lat:lastLat,lon:lastLon};aemetLastGood=null;
+    }
+    const order=aemetLastGood?[aemetLastGood,...aemetCandidates.filter(c=>c.id!==aemetLastGood.id)]:aemetCandidates;
+    let rec=null,st=null;
+    for(const cand of order){
+      try{
+        const meta=await fetchAemetJson(`${AEB}/mensualesanuales/datos/anioini/${ano}/aniofin/${ano}/estacion/${cand.id}?api_key=${AEK}`);
+        if(meta.estado!==200)continue;
+        const rows=await fetchAemetJson(meta.datos);
+        const r2=rows.find(x=>x.fecha===`${ano}-${mes}`);
+        if(r2&&Object.keys(r2).length>2){rec=r2;st=cand;aemetLastGood=cand;break}
+      }catch{}
+    }
+    if(!rec){res.innerHTML=`<div class="no-data">Sin datos de AEMET para ${MESES[mes-1]} ${ano} en las estaciones cercanas a esta ubicación.</div>`;return}
+    const fmtT=v=>v!=null?v.replace(".",",")+"°":"-";
+    const fmtV=(v,u)=>v!=null?v.replace(".",",")+(u||""):"-";
+    res.innerHTML=`
+      <div class="card">
+        <div class="ct ct-b">${MESES[mes-1]} ${ano} — ${st.name} <span style="color:var(--text2);font-weight:400">(${st.dist.toFixed(0)} km)</span></div>
+        <div class="g3">
+          <div class="m"><div class="v" style="color:${tc(parseFloat(rec.tm_mes))}">${fmtT(rec.tm_mes)}</div><div class="l">Media</div></div>
+          <div class="m"><div class="v" style="color:${tc(parseFloat(rec.tm_max))}">${fmtT(rec.tm_max)}</div><div class="l">Med. máximas</div></div>
+          <div class="m"><div class="v" style="color:${tc(parseFloat(rec.tm_min))}">${fmtT(rec.tm_min)}</div><div class="l">Med. mínimas</div></div>
+        </div>
+        <div class="g2" style="margin-top:8px">
+          <div class="m"><div class="v">${rec.ta_max?rec.ta_max.replace(".",","):"-"}</div><div class="l">Máx. absoluta</div></div>
+          <div class="m"><div class="v">${rec.ta_min?rec.ta_min.replace(".",","):"-"}</div><div class="l">Mín. absoluta</div></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="ct ct-c">Precipitación</div>
+        <div class="g3">
+          <div class="m"><div class="v">${fmtV(rec.p_mes," mm")}</div><div class="l">Acumulada</div></div>
+          <div class="m"><div class="v">${fmtV(rec.n_llu)}</div><div class="l">Días lluvia</div></div>
+          <div class="m"><div class="v">${rec.p_max?rec.p_max.split("(")[0].replace(".",",")+" mm":"-"}</div><div class="l">Máx. diaria</div></div>
+        </div>
+      </div>
+      ${rec.hr||rec.w_med||rec.inso?`<div class="card"><div class="ct ct-o">Otros datos</div><div class="g3">
+        <div class="m"><div class="v">${fmtV(rec.hr,"%")}</div><div class="l">Hum. media</div></div>
+        <div class="m"><div class="v">${fmtV(rec.w_med," km/h")}</div><div class="l">Viento medio</div></div>
+        <div class="m"><div class="v">${fmtV(rec.inso," h")}</div><div class="l">Sol/día</div></div>
+      </div></div>`:""}
+    `;
+  }catch(e){res.innerHTML=`<div class="no-data" style="color:#ef4444">Error: ${e.message}</div>`}
+}
+
+const TB=["ahora","ayer","prev","est","hist"];
 function setEstView(v){
   document.querySelectorAll('.est-tab').forEach(b=>b.classList.toggle('on',b.dataset.v===v));
   const mc=document.querySelector('.main-col'),cont=document.getElementById('content'),mapc=document.getElementById('mapc');
@@ -436,7 +539,8 @@ function stab(id){document.querySelectorAll(".tabs button").forEach((b,i)=>b.cla
   if(id!=='est'){const mc=document.querySelector('.main-col'),cont=document.getElementById('content');mc.style.flex='';cont.style.display='';}
   if(M){showMap(id==="est"&&desktop);if(id==="est"&&desktop&&M._stBounds)setTimeout(()=>M.fitBounds(M._stBounds.pad(.15)),150)}
 if(id==="ayer"&&window._yHourly)setTimeout(()=>drawTempChart("chart-yesterday",window._yHourly),100);
-if(id==="ahora"&&window._todayHourly)setTimeout(()=>drawTempChart("chart-today",window._todayHourly,window._todayForecast),100)}
+if(id==="ahora"&&window._todayHourly)setTimeout(()=>drawTempChart("chart-today",window._todayHourly,window._todayForecast),100);
+if(id==="hist")initHist()}
 
 function showH(di){if(!HD)return;const d0=HD.validTimeLocal[0]?.substring(0,10),dd=new Date(d0);dd.setDate(dd.getDate()+di);const tgt=dd.toISOString().substring(0,10);
 let h=`<div class="hs">`,n=0;for(let i=0;i<HD.validTimeLocal.length;i++){const dt=HD.validTimeLocal[i];if(!dt.startsWith(tgt))continue;
