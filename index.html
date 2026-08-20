@@ -157,9 +157,7 @@ header h1 small{font-weight:400;color:rgba(255,255,255,.7);font-size:11px;displa
   <button onclick="stab('ayer')"><i data-lucide="history"></i><span>Ayer</span></button>
   <button onclick="stab('prev')"><i data-lucide="cloud-sun"></i><span>Previsión</span></button>
   <button onclick="stab('est')"><i data-lucide="radio"></i><span>Estaciones</span></button>
-  <button onclick="stab('hist')"><i data-lucide="calendar-days"></i><span>Histórico</span></button>
-  <button onclick="stab('aemetp')"><i data-lucide="cloud-sun-rain"></i><span>AEMET</span></button>
-</div>
+  <button onclick="stab('hist')"><i data-lucide="calendar-days"></i><span>Histórico</span></button></div>
 <div id="est-bar">
   <button class="est-tab on" data-v="lista" onclick="setEstView('lista')">📋 Lista</button>
   <button class="est-tab" data-v="mapa" onclick="setEstView('mapa')">🗺 Mapa</button>
@@ -170,7 +168,6 @@ header h1 small{font-weight:400;color:rgba(255,255,255,.7);font-size:11px;displa
   <div id="t-prev" class="tv"></div>
   <div id="t-est" class="tv"></div>
   <div id="t-hist" class="tv"></div>
-  <div id="t-aemetp" class="tv"></div>
 </div>
 <div id="aemet-modal-overlay">
   <div id="aemet-modal">
@@ -412,6 +409,23 @@ async function loadForecast(src){
       HD={validTimeLocal:d.hourly.time.map(t=>t+":00"),temperature:d.hourly.temperature_2m,precipChance:d.hourly.precipitation_probability,iconCode:d.hourly.weathercode.map(c=>null),windSpeed:d.hourly.windspeed_10m,windDirectionCardinal:d.hourly.winddirection_10m?.map(wl)||[]};
       HD._wmo=d.hourly.weathercode;
       for(let i=0;i<d.daily.time.length;i++){const dt=new Date(d.daily.time[i]+"T12:00:00");days.push({name:i===0?"Hoy":dw[dt.getDay()],hi:d.daily.temperature_2m_max[i],lo:d.daily.temperature_2m_min[i],icon:wmoIcon(d.daily.weathercode[i]),phrase:wmoText(d.daily.weathercode[i]),precip:null,wind:d.daily.windspeed_10m_max[i],wdir:"",rain:d.daily.precipitation_sum[i]})}
+    }else if(src==="aemet"){
+      await loadAemetMunicipios();
+      const mun=nearestMunicipio(lat,lon);
+      if(!mun)throw new Error("No se encontró municipio AEMET cercano.");
+      const meta=await fetchAemetJson(`${AEP}/prediccion/especifica/municipio/diaria/${mun.id}?api_key=${AEK}`);
+      if(meta.estado!==200)throw new Error(meta.descripcion||"Error AEMET");
+      const data=await fetchAemetJson(meta.datos);
+      const dias=data[0]?.prediccion?.dia||[];
+      AEMET_DIAS={dias,nombre:mun.n};
+      const dw=["Domingo","Lunes","Martes","Miércoles","Jueves","Viernes","Sábado"];
+      dias.forEach((d,i)=>{
+        const s=buildDaySummary(d);
+        const midDay=s.periods.find(p=>p.key==="12-18")||s.periods[Math.floor(s.periods.length/2)]||{};
+        const dt=new Date(d.fecha);
+        const maxProb=Math.max(0,...(d.probPrecipitacion||[]).map(p=>p.value!==""?+p.value:0));
+        days.push({name:i===0?"Hoy":dw[dt.getDay()],hi:d.temperatura?.maxima,lo:d.temperatura?.minima,icon:aemetIcon(midDay.code,midDay.desc),phrase:midDay.desc||"",precip:maxProb||null,wind:null,wdir:""});
+      });
     }
     FC_DAYS=days;FC_DAYPART=dp;
 
@@ -442,7 +456,7 @@ async function loadForecast(src){
 
   }catch(e){tab.innerHTML=(hdr||buildSrcSel(src))+`<div class="no-data" style="color:#ef4444">Error: ${e.message}</div>`;tab.querySelectorAll(".src-btn").forEach(b=>b.addEventListener("click",()=>loadForecast(b.dataset.src)))}
 }
-function buildSrcSel(cur){return`<div class="src-sel"><button class="src-btn ${cur==="wc"?"on":""}" data-src="wc">Weather Co.</button><button class="src-btn ${cur==="om"?"on":""}" data-src="om">Open-Meteo</button></div>`}
+function buildSrcSel(cur){return`<div class="src-sel"><button class="src-btn ${cur==="wc"?"on":""}" data-src="wc">Weather Co.</button><button class="src-btn ${cur==="om"?"on":""}" data-src="om">Open-Meteo</button><button class="src-btn ${cur==="aemet"?"on":""}" data-src="aemet">AEMET</button></div>`}
 
 function dms2dec(s){const h=s.slice(-1),digs=s.slice(0,-1);const ss=parseInt(digs.slice(-2)),mm=parseInt(digs.slice(-4,-2)),dd=parseInt(digs.slice(0,-4));let dec=dd+mm/60+ss/3600;if(h==="S"||h==="W")dec=-dec;return dec}
 
@@ -556,65 +570,6 @@ function composeSentenceFromPeriods(periods){
   return frase;
 }
 
-async function loadAemetForecast(){
-  const t=document.getElementById("t-aemetp");
-  t.innerHTML=`<div class="no-data">Cargando previsión AEMET...</div>`;
-  if(!lastLat&&!lastLon){t.innerHTML=`<div class="no-data">Busque antes un municipio.</div>`;return}
-  try{
-    await loadAemetMunicipios();
-    const mun=nearestMunicipio(lastLat,lastLon);
-    if(!mun){t.innerHTML=`<div class="no-data">No se encontró municipio AEMET cercano.</div>`;return}
-    const meta=await fetchAemetJson(`${AEP}/prediccion/especifica/municipio/diaria/${mun.id}?api_key=${AEK}`);
-    if(meta.estado!==200)throw new Error(meta.descripcion||"Error AEMET");
-    const data=await fetchAemetJson(meta.datos);
-    const dias=data[0]?.prediccion?.dia||[];
-    AEMET_DIAS={dias,nombre:mun.n};
-    if(!dias.length){t.innerHTML=`<div class="no-data">Sin previsión disponible para ${mun.n}.</div>`;return}
-    const dw=["Domingo","Lunes","Martes","Miércoles","Jueves","Viernes","Sábado"];
-    let html=`<div style="text-align:center;font-size:12px;color:var(--text2);margin-bottom:10px">Municipio AEMET: <b style="color:var(--accent)">${mun.n}</b></div>`;
-    dias.forEach((d,i)=>{
-      const s=buildDaySummary(d);
-      const midDay=s.periods.find(p=>p.key==="12-18")||s.periods[Math.floor(s.periods.length/2)]||{};
-      const icon=aemetIcon(midDay.code,midDay.desc);
-      const dt=new Date(d.fecha);
-      const name=i===0?"Hoy":dw[dt.getDay()];
-      const hi=d.temperatura?.maxima,lo=d.temperatura?.minima;
-      const maxProb=Math.max(0,...(d.probPrecipitacion||[]).map(p=>p.value!==""?+p.value:0));
-      html+=`<div class="fd" onclick="openAemetModal(${i})"><div class="fd-i">${icon}</div><div class="fd-body"><div class="fd-n">${name}</div><div class="fd-p">${midDay.desc||""}</div></div><div class="fd-right"><div class="fd-t"><span class="hi" style="color:${tc(hi)}">${hi!=null?hi+"°":"--"}</span> <span class="lo">${lo!=null?lo+"°":"--"}</span></div><div class="fd-d">${maxProb?"💧"+maxProb+"%":""}</div></div></div>`;
-    });
-    html+=`<div style="font-size:10px;color:var(--text2);text-align:center;margin-top:6px">Fuente: AEMET OpenData — toca un día para ver el resumen</div>`;
-    t.innerHTML=html;
-  }catch(e){t.innerHTML=`<div class="no-data" style="color:#ef4444">Error: ${e.message}</div>`}
-}
-function initAemetTab(){const t=document.getElementById("t-aemetp");if(!t.innerHTML)loadAemetForecast()}
-
-function openAemetModal(i){
-  if(!AEMET_DIAS)return;
-  const d=AEMET_DIAS.dias[i];const s=buildDaySummary(d);
-  const dw=["Domingo","Lunes","Martes","Miércoles","Jueves","Viernes","Sábado"];
-  const dt=new Date(d.fecha);const name=i===0?"Hoy":dw[dt.getDay()];
-  const fechaTxt=dt.toLocaleDateString("es-ES",{weekday:"long",day:"numeric",month:"long"});
-  const hi=d.temperatura?.maxima,lo=d.temperatura?.minima;
-  let rows="";
-  s.periods.forEach(p=>{
-    rows+=`<div class="am-period"><div class="ap-i">${aemetIcon(p.code,p.desc)}</div><div class="ap-l">${p.label}</div><div class="ap-d">${p.desc}</div><div class="ap-p">${p.prob!=null&&p.prob>0?p.prob+"%":""}</div></div>`;
-  });
-  const uv=d.uvMax!=null?ul(d.uvMax):null;
-  document.getElementById("aemet-modal-body").innerHTML=`
-    <div class="am-title">${name}</div>
-    <div class="am-sub">${fechaTxt} · ${AEMET_DIAS.nombre}</div>
-    <div class="am-sentence">${s.sentence}</div>
-    <div class="am-periods">${rows}</div>
-    <div class="card" style="margin-bottom:0">
-      <div class="g3">
-        <div class="m"><div class="v" style="color:${tc(hi)}">${hi!=null?hi+"°":"--"}</div><div class="l">Máxima</div></div>
-        <div class="m"><div class="v" style="color:${tc(lo)}">${lo!=null?lo+"°":"--"}</div><div class="l">Mínima</div></div>
-        <div class="m"><div class="v">${d.humedadRelativa?.maxima!=null?d.humedadRelativa.maxima+"%":"--"}</div><div class="l">Hum. máx.</div></div>
-        ${uv?`<div class="m"><div class="v" style="color:${uv.c}">${d.uvMax}</div><div class="l">UV ${uv.t}</div></div>`:""}
-      </div>
-    </div>`;
-  document.getElementById("aemet-modal-overlay").classList.add("on");
-}
 function closeAemetModal(){document.getElementById("aemet-modal-overlay").classList.remove("on")}
 document.getElementById("aemet-modal-overlay").addEventListener("click",e=>{if(e.target.id==="aemet-modal-overlay")closeAemetModal()});
 
@@ -870,7 +825,7 @@ async function loadHistDay(){
   }catch(e){res.innerHTML=`<div class="no-data" style="color:#ef4444">Error: ${e.message}</div>`}
 }
 
-const TB=["ahora","ayer","prev","est","hist","aemetp"];
+const TB=["ahora","ayer","prev","est","hist"];
 function setEstView(v){
   document.querySelectorAll('.est-tab').forEach(b=>b.classList.toggle('on',b.dataset.v===v));
   const mc=document.querySelector('.main-col'),cont=document.getElementById('content'),mapc=document.getElementById('mapc');
@@ -890,8 +845,7 @@ function stab(id){document.querySelectorAll(".tabs button").forEach((b,i)=>b.cla
   if(M){showMap(id==="est"&&desktop);if(id==="est"&&desktop&&M._stBounds)setTimeout(()=>M.fitBounds(M._stBounds.pad(.15)),150)}
 if(id==="ayer"&&window._yHourly)setTimeout(()=>drawTempChart("chart-yesterday",window._yHourly),100);
 if(id==="ahora"&&window._todayHourly)setTimeout(()=>drawTempChart("chart-today",window._todayHourly,window._todayForecast),100);
-if(id==="hist")initHist()
-if(id==="aemetp")initAemetTab()}
+if(id==="hist")initHist()}
 
 function showH(di){if(!HD)return;const d0=HD.validTimeLocal[0]?.substring(0,10),dd=new Date(d0);dd.setDate(dd.getDate()+di);const tgt=dd.toISOString().substring(0,10);
 let h=`<div class="hs">`,n=0;for(let i=0;i<HD.validTimeLocal.length;i++){const dt=HD.validTimeLocal[i];if(!dt.startsWith(tgt))continue;
@@ -939,31 +893,42 @@ function buildOmDaySummary(di){
 function openForecastDayModal(i){
   if(!FC_DAYS||!FC_DAYS[i])return;
   const day=FC_DAYS[i];
-  let sentenceHtml="",periodsHtml="";
+  let sentenceHtml="",periodsHtml="",hourly="",fechaTxt="",fuenteTxt="",statsHtml="";
   if(lastFcSrc==="wc"&&FC_DAYPART){
     const di=i*2,ni=i*2+1;
     const dayN=FC_DAYPART.narrative?.[di],nightN=FC_DAYPART.narrative?.[ni];
     sentenceHtml=[dayN,nightN].filter(Boolean).map(t=>`<div>${t}</div>`).join("");
     if(!sentenceHtml)sentenceHtml=`<div>${day.phrase||"Previsión no disponible."}</div>`;
+    fuenteTxt="The Weather Company";
+    const dt=new Date();dt.setDate(dt.getDate()+i);fechaTxt=dt.toLocaleDateString("es-ES",{weekday:"long",day:"numeric",month:"long"});
+    hourly=buildHourlyStripHtml(i);
+    statsHtml=`<div class="m"><div class="v" style="color:${tc(day.hi)}">${day.hi!=null?day.hi+"°":"--"}</div><div class="l">Máxima</div></div><div class="m"><div class="v" style="color:${tc(day.lo)}">${day.lo!=null?day.lo+"°":"--"}</div><div class="l">Mínima</div></div><div class="m"><div class="v">${day.wind!=null?day.wind+" km/h":"--"}</div><div class="l">Viento ${day.wdir||""}</div></div>`;
   }else if(lastFcSrc==="om"){
     const s=buildOmDaySummary(i);
     sentenceHtml=`<div>${s?s.sentence:(day.phrase||"Previsión no disponible.")}</div>`;
     if(s)periodsHtml=s.periods.map(p=>`<div class="am-period"><div class="ap-i">${wmoIcon(p.code)}</div><div class="ap-l">${p.label}</div><div class="ap-d">${p.desc}</div><div class="ap-p">${p.prob>0?Math.round(p.prob)+"%":""}</div></div>`).join("");
+    fuenteTxt="Open-Meteo";
+    const dt=new Date();dt.setDate(dt.getDate()+i);fechaTxt=dt.toLocaleDateString("es-ES",{weekday:"long",day:"numeric",month:"long"});
+    hourly=buildHourlyStripHtml(i);
+    statsHtml=`<div class="m"><div class="v" style="color:${tc(day.hi)}">${day.hi!=null?day.hi+"°":"--"}</div><div class="l">Máxima</div></div><div class="m"><div class="v" style="color:${tc(day.lo)}">${day.lo!=null?day.lo+"°":"--"}</div><div class="l">Mínima</div></div><div class="m"><div class="v">${day.wind!=null?day.wind+" km/h":"--"}</div><div class="l">Viento ${day.wdir||""}</div></div>`;
+  }else if(lastFcSrc==="aemet"&&AEMET_DIAS){
+    const d=AEMET_DIAS.dias[i];const s=buildDaySummary(d);
+    sentenceHtml=`<div>${s.sentence}</div>`;
+    periodsHtml=s.periods.map(p=>`<div class="am-period"><div class="ap-i">${aemetIcon(p.code,p.desc)}</div><div class="ap-l">${p.label}</div><div class="ap-d">${p.desc}</div><div class="ap-p">${p.prob!=null&&p.prob>0?p.prob+"%":""}</div></div>`).join("");
+    fuenteTxt=AEMET_DIAS.nombre;
+    const dt=new Date(d.fecha);fechaTxt=dt.toLocaleDateString("es-ES",{weekday:"long",day:"numeric",month:"long"});
+    const uv=d.uvMax!=null?ul(d.uvMax):null;
+    statsHtml=`<div class="m"><div class="v" style="color:${tc(day.hi)}">${day.hi!=null?day.hi+"°":"--"}</div><div class="l">Máxima</div></div><div class="m"><div class="v" style="color:${tc(day.lo)}">${day.lo!=null?day.lo+"°":"--"}</div><div class="l">Mínima</div></div><div class="m"><div class="v">${d.humedadRelativa?.maxima!=null?d.humedadRelativa.maxima+"%":"--"}</div><div class="l">Hum. máx.</div></div>${uv?`<div class="m"><div class="v" style="color:${uv.c}">${d.uvMax}</div><div class="l">UV ${uv.t}</div></div>`:""}`;
   }
-  const hourly=buildHourlyStripHtml(i);
-  const dt=new Date();dt.setDate(dt.getDate()+i);
-  const fechaTxt=dt.toLocaleDateString("es-ES",{weekday:"long",day:"numeric",month:"long"});
   document.getElementById("aemet-modal-body").innerHTML=`
     <div class="am-title">${day.name}</div>
-    <div class="am-sub">${fechaTxt} · ${lastFcSrc==="wc"?"The Weather Company":"Open-Meteo"}</div>
+    <div class="am-sub">${fechaTxt} · ${fuenteTxt}</div>
     <div class="am-sentence">${sentenceHtml}</div>
     ${periodsHtml?`<div class="am-periods">${periodsHtml}</div>`:""}
     ${hourly?`<div style="font-size:11px;color:var(--text2);margin-bottom:6px">Hora a hora</div>${hourly}`:""}
     <div class="card" style="margin-bottom:0;margin-top:14px">
       <div class="g3">
-        <div class="m"><div class="v" style="color:${tc(day.hi)}">${day.hi!=null?day.hi+"°":"--"}</div><div class="l">Máxima</div></div>
-        <div class="m"><div class="v" style="color:${tc(day.lo)}">${day.lo!=null?day.lo+"°":"--"}</div><div class="l">Mínima</div></div>
-        <div class="m"><div class="v">${day.wind!=null?day.wind+" km/h":"--"}</div><div class="l">Viento ${day.wdir||""}</div></div>
+        ${statsHtml}
       </div>
     </div>`;
   document.getElementById("aemet-modal-overlay").classList.add("on");
