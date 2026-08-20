@@ -390,7 +390,7 @@ function wi(c){if(c==null)return"";const m={0:'thunderstorms-rain',1:'thundersto
 function wmoIcon(c){const m={0:'clear-day',1:'partly-cloudy-day',2:'partly-cloudy-day',3:'cloudy',45:'fog',48:'fog',51:'drizzle',53:'drizzle',55:'drizzle',56:'sleet',57:'sleet',61:'rain',63:'rain',65:'rain',66:'sleet',67:'sleet',71:'snow',73:'snow',75:'snow',77:'snow',80:'rain',81:'rain',82:'rain',85:'snow',86:'snow',95:'thunderstorms-rain',96:'thunderstorms-rain',99:'thunderstorms-rain'};return _mc(m[c]||'not-available')}
 function wmoText(c){const t={0:"Despejado",1:"Poco nuboso",2:"Parcialmente nublado",3:"Nublado",45:"Niebla",48:"Niebla",51:"Llovizna",53:"Llovizna",55:"Llovizna intensa",61:"Lluvia ligera",63:"Lluvia moderada",65:"Lluvia intensa",71:"Nevada ligera",73:"Nevada moderada",75:"Nevada intensa",80:"Chubascos",81:"Chubascos moderados",82:"Chubascos intensos",95:"Tormenta",96:"Tormenta con granizo",99:"Tormenta fuerte"};return t[c]||""}
 
-let lastLat=0,lastLon=0,lastFcSrc="wc";
+let lastLat=0,lastLon=0,lastFcSrc="wc",FC_DAYS=null,FC_DAYPART=null;
 async function loadForecast(src){
   lastFcSrc=src;const lat=lastLat,lon=lastLon;
   document.querySelectorAll(".src-btn").forEach(b=>b.classList.toggle("on",b.dataset.src===src));
@@ -399,11 +399,11 @@ async function loadForecast(src){
   tab.innerHTML=hdr+`<div class="no-data">Cargando prevision...</div>`;
 
   try{
-    let days=[];HD=null;
+    let days=[];HD=null;let dp=null;
     if(src==="wc"){
       const[fr,hr]=await Promise.all([fetch(`${WB}/v3/wx/forecast/daily/5day?apiKey=${AK}&geocode=${lat},${lon}&units=m&language=es-ES&format=json`),fetch(`${WB}/v3/wx/forecast/hourly/2day?apiKey=${AK}&geocode=${lat},${lon}&units=m&language=es-ES&format=json`)]);
       if(!fr.ok)throw new Error("API error");const fc=await fr.json();if(hr.ok)HD=await hr.json();
-      const dp=fc.daypart?.[0]||{};
+      dp=fc.daypart?.[0]||{};
       for(let i=0;i<fc.dayOfWeek.length;i++){const di=i*2,ni=i*2+1;days.push({name:i===0?"Hoy":fc.dayOfWeek[i],hi:fc.temperatureMax[i],lo:fc.temperatureMin[i],icon:wi(dp.iconCode?.[di]??dp.iconCode?.[ni]),phrase:dp.wxPhraseLong?.[di]??dp.wxPhraseLong?.[ni]??"",precip:dp.precipChance?.[di]??dp.precipChance?.[ni],wind:dp.windSpeed?.[di]??dp.windSpeed?.[ni],wdir:dp.windDirectionCardinal?.[di]??dp.windDirectionCardinal?.[ni]??""})}
     }else if(src==="om"){
       const r=await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,windspeed_10m_max,weathercode&hourly=temperature_2m,precipitation_probability,weathercode,windspeed_10m,winddirection_10m&timezone=auto&forecast_days=7`);
@@ -413,6 +413,7 @@ async function loadForecast(src){
       HD._wmo=d.hourly.weathercode;
       for(let i=0;i<d.daily.time.length;i++){const dt=new Date(d.daily.time[i]+"T12:00:00");days.push({name:i===0?"Hoy":dw[dt.getDay()],hi:d.daily.temperature_2m_max[i],lo:d.daily.temperature_2m_min[i],icon:wmoIcon(d.daily.weathercode[i]),phrase:wmoText(d.daily.weathercode[i]),precip:null,wind:d.daily.windspeed_10m_max[i],wdir:"",rain:d.daily.precipitation_sum[i]})}
     }
+    FC_DAYS=days;FC_DAYPART=dp;
 
     let html=hdr||buildSrcSel(src);
     if(days.length){
@@ -421,7 +422,7 @@ async function loadForecast(src){
       days.forEach((d,i)=>{
         const precTxt=d.precip!=null?`💧${d.precip}%`:(d.rain!=null?`💧${d.rain.toFixed(1)}mm`:"");
         const windTxt=d.wind!=null?`🌬 ${d.wind} ${d.wdir}`:"";
-        html+=`<div class="fd" onclick="showH(${i})"><div class="fd-i">${d.icon}</div><div class="fd-body"><div class="fd-n">${d.name}</div><div class="fd-p">${d.phrase}</div></div><div class="fd-right"><div class="fd-t"><span class="hi" style="color:${tc(d.hi)}">${d.hi!=null?d.hi+"°":"--"}</span> <span class="lo">${d.lo!=null?d.lo+"°":"--"}</span></div><div class="fd-d">${precTxt} ${windTxt}</div></div></div>`});
+        html+=`<div class="fd" onclick="showH(${i});openForecastDayModal(${i})"><div class="fd-i">${d.icon}</div><div class="fd-body"><div class="fd-n">${d.name}</div><div class="fd-p">${d.phrase}</div></div><div class="fd-right"><div class="fd-t"><span class="hi" style="color:${tc(d.hi)}">${d.hi!=null?d.hi+"°":"--"}</span> <span class="lo">${d.lo!=null?d.lo+"°":"--"}</span></div><div class="fd-d">${precTxt} ${windTxt}</div></div></div>`});
       html+=`<div id="hp" class="hp"></div>`;
     }else html+=`<div class="no-data">Prevision no disponible.</div>`;
     html+=`<div class="card" style="padding:0;overflow:hidden;margin-top:8px">
@@ -529,6 +530,15 @@ function buildDaySummary(dia){
     if(s)periods=[{key:s.periodo||"00-24",label:"Todo el día",np:"todo el día",desc:s.descripcion||"",code:s.value||"",prob:(prec[0]&&prec[0].value!==""?+prec[0].value:null)}];
   }
   if(!periods.length)return{sentence:"Previsión no disponible para este día.",periods:[]};
+  return{sentence:composeSentenceFromPeriods(periods),periods};
+}
+
+// Compone una frase tipo "estilo AccuWeather" a partir de una lista cronologica de
+// franjas {desc,np,prob}, agrupando franjas consecutivas con la misma descripcion
+// para no repetir (p.ej. "Nuboso por la mañana y la tarde" en vez de dos frases sueltas).
+// Compartida entre la pestaña AEMET y las fuentes Open-Meteo de la pestaña Prevision.
+function composeSentenceFromPeriods(periods){
+  if(!periods.length)return"Previsión no disponible para este día.";
   const segs=[];
   for(const p of periods){
     const last=segs[segs.length-1];
@@ -543,7 +553,7 @@ function buildDaySummary(dia){
     return t;
   }).join(", ");
   frase=frase.charAt(0).toUpperCase()+frase.slice(1)+(segs.length>1?".":" durante todo el día.");
-  return{sentence:frase,periods};
+  return frase;
 }
 
 async function loadAemetForecast(){
@@ -889,6 +899,75 @@ let h=`<div class="hs">`,n=0;for(let i=0;i<HD.validTimeLocal.length;i++){const d
   h+=`<div class="hi2"><div class="hh">${dt.substring(11,16)}</div><div class="hic">${ic}</div><div class="ht" style="color:${tc(HD.temperature[i])}">${HD.temperature[i]}°</div><div class="he">${pc!=null?"💧"+pc+"% ":""}💨${HD.windSpeed[i]}</div></div>`;n++}h+=`</div>`;
 const p=document.getElementById("hp");if(n){p.innerHTML=h;p.style.display="block"}else p.style.display="none";
 document.querySelectorAll(".fd").forEach((d,i)=>d.classList.toggle("on",i===di))}
+
+function buildHourlyStripHtml(di){
+  if(!HD)return"";
+  const d0=HD.validTimeLocal[0]?.substring(0,10);if(!d0)return"";
+  const dd=new Date(d0);dd.setDate(dd.getDate()+di);const tgt=dd.toISOString().substring(0,10);
+  let h=`<div class="hs">`,n=0;
+  for(let i=0;i<HD.validTimeLocal.length;i++){const dt=HD.validTimeLocal[i];if(!dt.startsWith(tgt))continue;
+    const ic=HD._wmo?wmoIcon(HD._wmo[i]):wi(HD.iconCode[i]);const pc=HD.precipChance?.[i];
+    h+=`<div class="hi2"><div class="hh">${dt.substring(11,16)}</div><div class="hic">${ic}</div><div class="ht" style="color:${tc(HD.temperature[i])}">${HD.temperature[i]}°</div><div class="he">${pc!=null?"💧"+pc+"% ":""}💨${HD.windSpeed[i]}</div></div>`;n++}
+  h+=`</div>`;
+  return n?h:"";
+}
+
+// Open-Meteo no da texto narrativo (a diferencia de Weather Company, que ya trae
+// dp.narrative en español), asi que se sintetiza igual que en la pestaña AEMET,
+// agrupando la prevision horaria en 4 franjas de 6h.
+const OM_PERIODOS=[[0,6,"De madrugada","la madrugada"],[6,12,"Por la mañana","la mañana"],[12,18,"Por la tarde","la tarde"],[18,24,"Por la noche","la noche"]];
+function buildOmDaySummary(di){
+  if(!HD||!HD._wmo)return null;
+  const d0=HD.validTimeLocal[0]?.substring(0,10);if(!d0)return null;
+  const dd=new Date(d0);dd.setDate(dd.getDate()+di);const tgt=dd.toISOString().substring(0,10);
+  const idxs=[];for(let i=0;i<HD.validTimeLocal.length;i++)if(HD.validTimeLocal[i].startsWith(tgt))idxs.push(i);
+  if(!idxs.length)return null;
+  const periods=OM_PERIODOS.map(([h0,h1,label,np])=>{
+    const sel=idxs.filter(i=>{const hh=+HD.validTimeLocal[i].substring(11,13);return hh>=h0&&hh<h1});
+    if(!sel.length)return null;
+    const codeIdx=sel.reduce((a,b)=>HD._wmo[b]>HD._wmo[a]?b:a);
+    const code=HD._wmo[codeIdx];
+    const maxProb=Math.max(...sel.map(i=>HD.precipChance?.[i]??0));
+    return{key:h0+"-"+h1,label,np,desc:wmoText(code)||"",code,prob:maxProb};
+  }).filter(Boolean);
+  if(!periods.length)return null;
+  return{sentence:composeSentenceFromPeriods(periods),periods};
+}
+
+// Popup de resumen del dia para la pestaña Prevision (Weather Company y Open-Meteo),
+// reutilizando el mismo modal que ya usa la pestaña AEMET.
+function openForecastDayModal(i){
+  if(!FC_DAYS||!FC_DAYS[i])return;
+  const day=FC_DAYS[i];
+  let sentenceHtml="",periodsHtml="";
+  if(lastFcSrc==="wc"&&FC_DAYPART){
+    const di=i*2,ni=i*2+1;
+    const dayN=FC_DAYPART.narrative?.[di],nightN=FC_DAYPART.narrative?.[ni];
+    sentenceHtml=[dayN,nightN].filter(Boolean).map(t=>`<div>${t}</div>`).join("");
+    if(!sentenceHtml)sentenceHtml=`<div>${day.phrase||"Previsión no disponible."}</div>`;
+  }else if(lastFcSrc==="om"){
+    const s=buildOmDaySummary(i);
+    sentenceHtml=`<div>${s?s.sentence:(day.phrase||"Previsión no disponible.")}</div>`;
+    if(s)periodsHtml=s.periods.map(p=>`<div class="am-period"><div class="ap-i">${wmoIcon(p.code)}</div><div class="ap-l">${p.label}</div><div class="ap-d">${p.desc}</div><div class="ap-p">${p.prob>0?Math.round(p.prob)+"%":""}</div></div>`).join("");
+  }
+  const hourly=buildHourlyStripHtml(i);
+  const dt=new Date();dt.setDate(dt.getDate()+i);
+  const fechaTxt=dt.toLocaleDateString("es-ES",{weekday:"long",day:"numeric",month:"long"});
+  document.getElementById("aemet-modal-body").innerHTML=`
+    <div class="am-title">${day.name}</div>
+    <div class="am-sub">${fechaTxt} · ${lastFcSrc==="wc"?"The Weather Company":"Open-Meteo"}</div>
+    <div class="am-sentence">${sentenceHtml}</div>
+    ${periodsHtml?`<div class="am-periods">${periodsHtml}</div>`:""}
+    ${hourly?`<div style="font-size:11px;color:var(--text2);margin-bottom:6px">Hora a hora</div>${hourly}`:""}
+    <div class="card" style="margin-bottom:0;margin-top:14px">
+      <div class="g3">
+        <div class="m"><div class="v" style="color:${tc(day.hi)}">${day.hi!=null?day.hi+"°":"--"}</div><div class="l">Máxima</div></div>
+        <div class="m"><div class="v" style="color:${tc(day.lo)}">${day.lo!=null?day.lo+"°":"--"}</div><div class="l">Mínima</div></div>
+        <div class="m"><div class="v">${day.wind!=null?day.wind+" km/h":"--"}</div><div class="l">Viento ${day.wdir||""}</div></div>
+      </div>
+    </div>`;
+  document.getElementById("aemet-modal-overlay").classList.add("on");
+}
 
 let deb=null;const inp=document.getElementById("inp"),sg=document.getElementById("sug");
 inp.addEventListener("input",function(){clearTimeout(deb);const q=this.value.trim();if(q.length<3){sg.style.display="none";return}deb=setTimeout(async()=>{try{const r=await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)},España&format=json&limit=8&addressdetails=1&accept-language=es`);if(!r.ok)return;const res=await r.json(),f=res.filter(r=>["city","town","village","municipality","administrative"].includes(r.type)||r.class==="place");if(!f.length){sg.style.display="none";return}sg.innerHTML="";for(const r of f){const d=document.createElement("div"),p=r.display_name.split(","),n=p[0].trim();d.innerHTML=n+`<small>${p.slice(1,3).map(s=>s.trim()).join(", ")}</small>`;d.addEventListener("click",()=>{inp.value=n;sg.style.display="none";go(n,+r.lat,+r.lon)});sg.appendChild(d)}sg.style.display="block"}catch{}},400)});
