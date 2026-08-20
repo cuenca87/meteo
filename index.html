@@ -85,6 +85,19 @@ header h1 small{font-weight:400;color:rgba(255,255,255,.7);font-size:11px;displa
 .fd-right{text-align:right;flex-shrink:0}
 .fd-t{font-size:16px;white-space:nowrap}.fd-t .hi{font-weight:700}.fd-t .lo{color:var(--text2)}
 .fd-d{font-size:10px;color:var(--text2);margin-top:2px}
+#aemet-modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:100;display:none;align-items:center;justify-content:center;padding:20px}
+#aemet-modal-overlay.on{display:flex}
+#aemet-modal{background:var(--bg2);border-radius:16px;max-width:420px;width:100%;max-height:82vh;overflow-y:auto;padding:20px;position:relative;box-shadow:0 12px 40px rgba(0,0,0,.35)}
+#aemet-modal-close{position:absolute;top:10px;right:10px;background:var(--bg3);border:none;width:32px;height:32px;border-radius:50%;font-size:15px;cursor:pointer;color:var(--text);z-index:1}
+.am-title{font-size:16px;font-weight:700;margin:2px 34px 4px 0}
+.am-sub{font-size:12px;color:var(--text2);margin-bottom:14px}
+.am-sentence{font-size:14.5px;line-height:1.5;background:var(--bg3);border-radius:12px;padding:12px 14px;margin-bottom:14px}
+.am-periods{display:flex;flex-direction:column;gap:6px;margin-bottom:14px}
+.am-period{display:flex;align-items:center;gap:10px;font-size:12.5px}
+.am-period .ap-i{font-size:20px;width:28px;text-align:center}
+.am-period .ap-l{width:80px;color:var(--text2);flex-shrink:0}
+.am-period .ap-d{flex:1;color:var(--text)}
+.am-period .ap-p{color:#3b82f6;font-weight:600;flex-shrink:0}
 
 .hp{display:none;margin-top:8px;margin-bottom:4px}
 .hs{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;scroll-snap-type:x mandatory}
@@ -145,6 +158,7 @@ header h1 small{font-weight:400;color:rgba(255,255,255,.7);font-size:11px;displa
   <button onclick="stab('prev')"><i data-lucide="cloud-sun"></i><span>Previsión</span></button>
   <button onclick="stab('est')"><i data-lucide="radio"></i><span>Estaciones</span></button>
   <button onclick="stab('hist')"><i data-lucide="calendar-days"></i><span>Histórico</span></button>
+  <button onclick="stab('aemetp')"><i data-lucide="cloud-sun-rain"></i><span>AEMET</span></button>
 </div>
 <div id="est-bar">
   <button class="est-tab on" data-v="lista" onclick="setEstView('lista')">📋 Lista</button>
@@ -156,6 +170,13 @@ header h1 small{font-weight:400;color:rgba(255,255,255,.7);font-size:11px;displa
   <div id="t-prev" class="tv"></div>
   <div id="t-est" class="tv"></div>
   <div id="t-hist" class="tv"></div>
+  <div id="t-aemetp" class="tv"></div>
+</div>
+<div id="aemet-modal-overlay">
+  <div id="aemet-modal">
+    <button id="aemet-modal-close" onclick="closeAemetModal()">✕</button>
+    <div id="aemet-modal-body"></div>
+  </div>
 </div>
 </div>
 <div id="mapc"><div id="map"></div></div>
@@ -164,8 +185,8 @@ header h1 small{font-weight:400;color:rgba(255,255,255,.7);font-size:11px;displa
 if("serviceWorker"in navigator)navigator.serviceWorker.register("sw.js").catch(()=>{});
 const AK="e1f10a1e78da46f5b10a1e78da96f525",WB="https://api.weather.com",IB="https://ideihm.covam.es/api-ihm/getmarea",OK="ce0a096cf16d15d2a2c9f21ac0b810e7";
 // AEMET OpenData: key emitida 2026-08-02 (cuenca87@gmail.com), caduca 2026-11-10 -> renovar en https://opendata.aemet.es/centrodedescargas/altaUsuario
-const AEK="eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJjdWVuY2E4N0BnbWFpbC5jb20iLCJqdGkiOiJiMDhmNTQ1ZS0zMDU5LTRkNjctYTcxMS0zYTc4NzI1ODg1MjgiLCJleHAiOjE3OTQzMjAxMzEsImlzcyI6IkFFTUVUIiwiaWF0IjoxNzg1NjgwMTMxLCJ1c2VySWQiOiJiMDhmNTQ1ZS0zMDU5LTRkNjctYTcxMS0zYTc4NzI1ODg1MjgiLCJyb2xlIjoiIn0.y6cR46MlBZ2SVG_v3gPqCk84Vkn0HMx_E9ojRSwSLRw",AEB="https://opendata.aemet.es/opendata/api/valores/climatologicos";
-let ports=null,M=null,ML=null,HD=null,aemetStations=null,aemetCandidates=null,aemetLastLoc=null,aemetLastGood=null,aemetLastGoodDay=null;
+const AEK="eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJjdWVuY2E4N0BnbWFpbC5jb20iLCJqdGkiOiJiMDhmNTQ1ZS0zMDU5LTRkNjctYTcxMS0zYTc4NzI1ODg1MjgiLCJleHAiOjE3OTQzMjAxMzEsImlzcyI6IkFFTUVUIiwiaWF0IjoxNzg1NjgwMTMxLCJ1c2VySWQiOiJiMDhmNTQ1ZS0zMDU5LTRkNjctYTcxMS0zYTc4NzI1ODg1MjgiLCJyb2xlIjoiIn0.y6cR46MlBZ2SVG_v3gPqCk84Vkn0HMx_E9ojRSwSLRw",AEB="https://opendata.aemet.es/opendata/api/valores/climatologicos",AEP="https://opendata.aemet.es/opendata/api";
+let ports=null,M=null,ML=null,HD=null,aemetStations=null,aemetCandidates=null,aemetLastLoc=null,aemetLastGood=null,aemetLastGoodDay=null,aemetMunicipios=null,AEMET_DIAS=null;
 const MESES=["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
 
 function initMap(){if(M)return;M=L.map("map").setView([39.5,-3],6);
@@ -427,7 +448,11 @@ function dms2dec(s){const h=s.slice(-1),digs=s.slice(0,-1);const ss=parseInt(dig
 // AEMET sirve JSON en ISO-8859-15; fetch().json() decodifica siempre como UTF-8 e ignora el charset, asi que hay que decodificar los bytes a mano
 async function fetchAemetJson(url){
   const r=await fetch(url);
-  if(!r.ok)throw new Error("Error API AEMET");
+  if(!r.ok){
+    if(r.status===429)throw new Error("AEMET ha limitado las peticiones por uso excesivo. Espera un minuto y vuelve a intentarlo.");
+    try{const j=await r.json();if(j?.descripcion)throw new Error(j.descripcion)}catch{}
+    throw new Error("Error API AEMET");
+  }
   const buf=await r.arrayBuffer();
   return JSON.parse(new TextDecoder("iso-8859-15").decode(buf));
 }
@@ -448,6 +473,140 @@ function nearestAemetList(lat,lon,n){
   return aemetStations.map(s=>({...s,dist:Math.sqrt((s.lat-lat)**2+((s.lon-lon)*Math.cos(lat*Math.PI/180))**2)*111.32}))
     .sort((a,b)=>a.dist-b.dist).slice(0,n);
 }
+
+// Previsión AEMET por municipio (pestaña "AEMET")
+async function loadAemetMunicipios(){
+  if(aemetMunicipios)return aemetMunicipios;
+  const cached=localStorage.getItem("aemetMunicipios");
+  if(cached){try{aemetMunicipios=JSON.parse(cached);return aemetMunicipios}catch{}}
+  const meta=await fetchAemetJson(`${AEP}/maestro/municipios?api_key=${AEK}`);
+  if(meta.estado!==200)throw new Error(meta.descripcion||"Error AEMET");
+  const list=await fetchAemetJson(meta.datos);
+  aemetMunicipios=list.map(m=>({id:(m.id||"").replace(/^id/,""),n:m.nombre,la:+m.latitud_dec,lo:+m.longitud_dec})).filter(m=>m.id&&!isNaN(m.la));
+  try{localStorage.setItem("aemetMunicipios",JSON.stringify(aemetMunicipios))}catch{}
+  return aemetMunicipios;
+}
+function nearestMunicipio(lat,lon){
+  let best=null,bd=Infinity;
+  for(const m of aemetMunicipios){const d=Math.sqrt((m.la-lat)**2+((m.lo-lon)*Math.cos(lat*Math.PI/180))**2);if(d<bd){bd=d;best=m}}
+  return best;
+}
+
+// Codigo AEMET de estado del cielo (p.ej. "26","25n") no coincide con WMO ni con Weather Company,
+// asi que se clasifica a partir del texto de "descripcion" que ya viene en español desde la API.
+function aemetIcon(code,desc){
+  const night=/n$/.test(code||"");const t=(desc||"").toLowerCase();
+  let name;
+  if(/tormenta/.test(t))name=/lluvia/.test(t)?'thunderstorms-rain':'thunderstorms';
+  else if(/granizo/.test(t))name='hail';
+  else if(/nieve/.test(t))name='snow';
+  else if(/niebla|bruma|calima/.test(t))name='fog';
+  else if(/chubasco/.test(t))name='rain';
+  else if(/lluvia/.test(t))name='rain';
+  else if(/cubierto/.test(t))name='cloudy';
+  else if(/muy nuboso/.test(t))name='cloudy';
+  else if(/nuboso|intervalos/.test(t))name=night?'partly-cloudy-night':'partly-cloudy-day';
+  else if(/despejado/.test(t))name=night?'clear-night':'clear-day';
+  else name='not-available';
+  return _mc(name);
+}
+
+const AM_PERIODOS=[["00-06","De madrugada","la madrugada"],["06-12","Por la mañana","la mañana"],["12-18","Por la tarde","la tarde"],["18-24","Por la noche","la noche"]];
+const AM_PERIODOS_12H=[["00-12","Por la mañana","la mañana"],["12-24","Por la tarde-noche","la tarde y la noche"]];
+
+// Sintetiza una frase tipo "estilo AccuWeather" a partir de las franjas de AEMET.
+// AEMET solo da franjas de 6h para los primeros 2-3 dias; para el resto la prediccion
+// viene mas gruesa (00-12/12-24, o incluso un unico dato para todo el dia) - hay que
+// intentar varios niveles de detalle en vez de asumir que siempre hay 4 franjas de 6h.
+function buildDaySummary(dia){
+  const sky=dia.estadoCielo||[],prec=dia.probPrecipitacion||[];
+  const byPer=k=>sky.find(s=>s.periodo===k),precByPer=k=>{const p=prec.find(p=>p.periodo===k);return p&&p.value!==""?+p.value:null};
+  const build=defs=>defs.map(([k,label,np])=>{const s=byPer(k);return s?{key:k,label,np,desc:s.descripcion||"",code:s.value||"",prob:precByPer(k)}:null}).filter(Boolean);
+  let periods=build(AM_PERIODOS);
+  if(periods.length<2)periods=build(AM_PERIODOS_12H);
+  if(!periods.length){
+    const s=sky[0];
+    if(s)periods=[{key:s.periodo||"00-24",label:"Todo el día",np:"todo el día",desc:s.descripcion||"",code:s.value||"",prob:(prec[0]&&prec[0].value!==""?+prec[0].value:null)}];
+  }
+  if(!periods.length)return{sentence:"Previsión no disponible para este día.",periods:[]};
+  const segs=[];
+  for(const p of periods){
+    const last=segs[segs.length-1];
+    if(last&&last.desc===p.desc){last.nps.push(p.np);last.maxProb=Math.max(last.maxProb,p.prob??0)}
+    else segs.push({desc:p.desc,nps:[p.np],maxProb:p.prob??0});
+  }
+  const frasesLabel=nps=>nps.length===1?("por "+nps[0]):("por "+nps.slice(0,-1).join(", ")+" y "+nps[nps.length-1]);
+  let frase=segs.map(s=>{
+    let t=s.desc.toLowerCase();
+    if(segs.length>1)t+=` ${frasesLabel(s.nps)}`;
+    if(s.maxProb>=40)t+=` (${s.maxProb}% de probabilidad de lluvia)`;
+    return t;
+  }).join(", ");
+  frase=frase.charAt(0).toUpperCase()+frase.slice(1)+(segs.length>1?".":" durante todo el día.");
+  return{sentence:frase,periods};
+}
+
+async function loadAemetForecast(){
+  const t=document.getElementById("t-aemetp");
+  t.innerHTML=`<div class="no-data">Cargando previsión AEMET...</div>`;
+  if(!lastLat&&!lastLon){t.innerHTML=`<div class="no-data">Busque antes un municipio.</div>`;return}
+  try{
+    await loadAemetMunicipios();
+    const mun=nearestMunicipio(lastLat,lastLon);
+    if(!mun){t.innerHTML=`<div class="no-data">No se encontró municipio AEMET cercano.</div>`;return}
+    const meta=await fetchAemetJson(`${AEP}/prediccion/especifica/municipio/diaria/${mun.id}?api_key=${AEK}`);
+    if(meta.estado!==200)throw new Error(meta.descripcion||"Error AEMET");
+    const data=await fetchAemetJson(meta.datos);
+    const dias=data[0]?.prediccion?.dia||[];
+    AEMET_DIAS={dias,nombre:mun.n};
+    if(!dias.length){t.innerHTML=`<div class="no-data">Sin previsión disponible para ${mun.n}.</div>`;return}
+    const dw=["Domingo","Lunes","Martes","Miércoles","Jueves","Viernes","Sábado"];
+    let html=`<div style="text-align:center;font-size:12px;color:var(--text2);margin-bottom:10px">Municipio AEMET: <b style="color:var(--accent)">${mun.n}</b></div>`;
+    dias.forEach((d,i)=>{
+      const s=buildDaySummary(d);
+      const midDay=s.periods.find(p=>p.key==="12-18")||s.periods[Math.floor(s.periods.length/2)]||{};
+      const icon=aemetIcon(midDay.code,midDay.desc);
+      const dt=new Date(d.fecha);
+      const name=i===0?"Hoy":dw[dt.getDay()];
+      const hi=d.temperatura?.maxima,lo=d.temperatura?.minima;
+      const maxProb=Math.max(0,...(d.probPrecipitacion||[]).map(p=>p.value!==""?+p.value:0));
+      html+=`<div class="fd" onclick="openAemetModal(${i})"><div class="fd-i">${icon}</div><div class="fd-body"><div class="fd-n">${name}</div><div class="fd-p">${midDay.desc||""}</div></div><div class="fd-right"><div class="fd-t"><span class="hi" style="color:${tc(hi)}">${hi!=null?hi+"°":"--"}</span> <span class="lo">${lo!=null?lo+"°":"--"}</span></div><div class="fd-d">${maxProb?"💧"+maxProb+"%":""}</div></div></div>`;
+    });
+    html+=`<div style="font-size:10px;color:var(--text2);text-align:center;margin-top:6px">Fuente: AEMET OpenData — toca un día para ver el resumen</div>`;
+    t.innerHTML=html;
+  }catch(e){t.innerHTML=`<div class="no-data" style="color:#ef4444">Error: ${e.message}</div>`}
+}
+function initAemetTab(){const t=document.getElementById("t-aemetp");if(!t.innerHTML)loadAemetForecast()}
+
+function openAemetModal(i){
+  if(!AEMET_DIAS)return;
+  const d=AEMET_DIAS.dias[i];const s=buildDaySummary(d);
+  const dw=["Domingo","Lunes","Martes","Miércoles","Jueves","Viernes","Sábado"];
+  const dt=new Date(d.fecha);const name=i===0?"Hoy":dw[dt.getDay()];
+  const fechaTxt=dt.toLocaleDateString("es-ES",{weekday:"long",day:"numeric",month:"long"});
+  const hi=d.temperatura?.maxima,lo=d.temperatura?.minima;
+  let rows="";
+  s.periods.forEach(p=>{
+    rows+=`<div class="am-period"><div class="ap-i">${aemetIcon(p.code,p.desc)}</div><div class="ap-l">${p.label}</div><div class="ap-d">${p.desc}</div><div class="ap-p">${p.prob!=null&&p.prob>0?p.prob+"%":""}</div></div>`;
+  });
+  const uv=d.uvMax!=null?ul(d.uvMax):null;
+  document.getElementById("aemet-modal-body").innerHTML=`
+    <div class="am-title">${name}</div>
+    <div class="am-sub">${fechaTxt} · ${AEMET_DIAS.nombre}</div>
+    <div class="am-sentence">${s.sentence}</div>
+    <div class="am-periods">${rows}</div>
+    <div class="card" style="margin-bottom:0">
+      <div class="g3">
+        <div class="m"><div class="v" style="color:${tc(hi)}">${hi!=null?hi+"°":"--"}</div><div class="l">Máxima</div></div>
+        <div class="m"><div class="v" style="color:${tc(lo)}">${lo!=null?lo+"°":"--"}</div><div class="l">Mínima</div></div>
+        <div class="m"><div class="v">${d.humedadRelativa?.maxima!=null?d.humedadRelativa.maxima+"%":"--"}</div><div class="l">Hum. máx.</div></div>
+        ${uv?`<div class="m"><div class="v" style="color:${uv.c}">${d.uvMax}</div><div class="l">UV ${uv.t}</div></div>`:""}
+      </div>
+    </div>`;
+  document.getElementById("aemet-modal-overlay").classList.add("on");
+}
+function closeAemetModal(){document.getElementById("aemet-modal-overlay").classList.remove("on")}
+document.getElementById("aemet-modal-overlay").addEventListener("click",e=>{if(e.target.id==="aemet-modal-overlay")closeAemetModal()});
 
 function buildHistSel(){
   const now=new Date(),y=now.getFullYear();
@@ -701,7 +860,7 @@ async function loadHistDay(){
   }catch(e){res.innerHTML=`<div class="no-data" style="color:#ef4444">Error: ${e.message}</div>`}
 }
 
-const TB=["ahora","ayer","prev","est","hist"];
+const TB=["ahora","ayer","prev","est","hist","aemetp"];
 function setEstView(v){
   document.querySelectorAll('.est-tab').forEach(b=>b.classList.toggle('on',b.dataset.v===v));
   const mc=document.querySelector('.main-col'),cont=document.getElementById('content'),mapc=document.getElementById('mapc');
@@ -721,7 +880,8 @@ function stab(id){document.querySelectorAll(".tabs button").forEach((b,i)=>b.cla
   if(M){showMap(id==="est"&&desktop);if(id==="est"&&desktop&&M._stBounds)setTimeout(()=>M.fitBounds(M._stBounds.pad(.15)),150)}
 if(id==="ayer"&&window._yHourly)setTimeout(()=>drawTempChart("chart-yesterday",window._yHourly),100);
 if(id==="ahora"&&window._todayHourly)setTimeout(()=>drawTempChart("chart-today",window._todayHourly,window._todayForecast),100);
-if(id==="hist")initHist()}
+if(id==="hist")initHist()
+if(id==="aemetp")initAemetTab()}
 
 function showH(di){if(!HD)return;const d0=HD.validTimeLocal[0]?.substring(0,10),dd=new Date(d0);dd.setDate(dd.getDate()+di);const tgt=dd.toISOString().substring(0,10);
 let h=`<div class="hs">`,n=0;for(let i=0;i<HD.validTimeLocal.length;i++){const dt=HD.validTimeLocal[i];if(!dt.startsWith(tgt))continue;
