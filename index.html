@@ -99,7 +99,6 @@ header h1 small{font-weight:400;color:rgba(255,255,255,.7);font-size:11px;displa
 .am-period .ap-d{flex:1;color:var(--text)}
 .am-period .ap-p{color:#3b82f6;font-weight:600;flex-shrink:0}
 
-.hp{display:none;margin-top:8px;margin-bottom:4px}
 .hs{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;scroll-snap-type:x mandatory}
 .hs::-webkit-scrollbar{height:0}
 .hi2{min-width:58px;flex-shrink:0;text-align:center;padding:8px 4px;background:var(--bg3);border-radius:8px;scroll-snap-align:start}
@@ -436,8 +435,7 @@ async function loadForecast(src){
       days.forEach((d,i)=>{
         const precTxt=d.precip!=null?`💧${d.precip}%`:(d.rain!=null?`💧${d.rain.toFixed(1)}mm`:"");
         const windTxt=d.wind!=null?`🌬 ${d.wind} ${d.wdir}`:"";
-        html+=`<div class="fd" onclick="showH(${i});openForecastDayModal(${i})"><div class="fd-i">${d.icon}</div><div class="fd-body"><div class="fd-n">${d.name}</div><div class="fd-p">${d.phrase}</div></div><div class="fd-right"><div class="fd-t"><span class="hi" style="color:${tc(d.hi)}">${d.hi!=null?d.hi+"°":"--"}</span> <span class="lo">${d.lo!=null?d.lo+"°":"--"}</span></div><div class="fd-d">${precTxt} ${windTxt}</div></div></div>`});
-      html+=`<div id="hp" class="hp"></div>`;
+        html+=`<div class="fd" onclick="openForecastDayModal(${i})"><div class="fd-i">${d.icon}</div><div class="fd-body"><div class="fd-n">${d.name}</div><div class="fd-p">${d.phrase}</div></div><div class="fd-right"><div class="fd-t"><span class="hi" style="color:${tc(d.hi)}">${d.hi!=null?d.hi+"°":"--"}</span> <span class="lo">${d.lo!=null?d.lo+"°":"--"}</span></div><div class="fd-d">${precTxt} ${windTxt}</div></div></div>`});
     }else html+=`<div class="no-data">Prevision no disponible.</div>`;
     html+=`<div class="card" style="padding:0;overflow:hidden;margin-top:8px">
       <div style="display:flex;border-bottom:1px solid var(--border)">
@@ -452,7 +450,6 @@ async function loadForecast(src){
     </div>`;
     tab.innerHTML=html;
     tab.querySelectorAll(".src-btn").forEach(b=>b.addEventListener("click",()=>loadForecast(b.dataset.src)));
-    if(days.length)showH(0);
 
   }catch(e){tab.innerHTML=(hdr||buildSrcSel(src))+`<div class="no-data" style="color:#ef4444">Error: ${e.message}</div>`;tab.querySelectorAll(".src-btn").forEach(b=>b.addEventListener("click",()=>loadForecast(b.dataset.src)))}
 }
@@ -846,13 +843,6 @@ function stab(id){document.querySelectorAll(".tabs button").forEach((b,i)=>b.cla
 if(id==="ayer"&&window._yHourly)setTimeout(()=>drawTempChart("chart-yesterday",window._yHourly),100);
 if(id==="ahora"&&window._todayHourly)setTimeout(()=>drawTempChart("chart-today",window._todayHourly,window._todayForecast),100);
 if(id==="hist")initHist()}
-
-function showH(di){if(!HD)return;const d0=HD.validTimeLocal[0]?.substring(0,10),dd=new Date(d0);dd.setDate(dd.getDate()+di);const tgt=dd.toISOString().substring(0,10);
-let h=`<div class="hs">`,n=0;for(let i=0;i<HD.validTimeLocal.length;i++){const dt=HD.validTimeLocal[i];if(!dt.startsWith(tgt))continue;
-  const ic=HD._wmo?wmoIcon(HD._wmo[i]):wi(HD.iconCode[i]);const pc=HD.precipChance?.[i];
-  h+=`<div class="hi2"><div class="hh">${dt.substring(11,16)}</div><div class="hic">${ic}</div><div class="ht" style="color:${tc(HD.temperature[i])}">${HD.temperature[i]}°</div><div class="he">${pc!=null?"💧"+pc+"% ":""}💨${HD.windSpeed[i]}</div></div>`;n++}h+=`</div>`;
-const p=document.getElementById("hp");if(n){p.innerHTML=h;p.style.display="block"}else p.style.display="none";
-document.querySelectorAll(".fd").forEach((d,i)=>d.classList.toggle("on",i===di))}
 
 function buildHourlyStripHtml(di){
   if(!HD)return"";
