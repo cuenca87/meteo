@@ -441,14 +441,12 @@ async function loadForecast(src){
       <div style="display:flex;border-bottom:1px solid var(--border)">
         <button class="rain-tab on" onclick="switchRain(this,'radar')" style="flex:1;padding:10px 4px;border:none;border-bottom:2px solid var(--accent);background:transparent;cursor:pointer;font-size:12px;font-weight:600;color:var(--accent)">🛰 Radar</button>
         <button class="rain-tab" onclick="switchRain(this,'ecmwf')" style="flex:1;padding:10px 4px;border:none;border-bottom:2px solid transparent;background:transparent;cursor:pointer;font-size:12px;font-weight:500;color:var(--text2)">📅 Previsión 10d</button>
-        <button class="rain-tab" onclick="switchRain(this,'satelite')" style="flex:1;padding:10px 4px;border:none;border-bottom:2px solid transparent;background:transparent;cursor:pointer;font-size:12px;font-weight:500;color:var(--text2)">🌍 En vivo</button>
       </div>
       <iframe id="rain-frame"
         src="https://embed.windy.com/embed2.html?lat=${lat}&lon=${lon}&zoom=8&level=surface&overlay=radar&product=radar&menu=&message=1&marker=1&calendar=now&pressure=&type=map&location=coordinates&detail=&detailLat=${lat}&detailLon=${lon}"
         style="width:100%;height:340px;border:none;display:block"
         allowfullscreen>
       </iframe>
-      <div id="rain-map" style="width:100%;height:340px;display:none"></div>
     </div>`;
     tab.innerHTML=html;
     tab.querySelectorAll(".src-btn").forEach(b=>b.addEventListener("click",()=>loadForecast(b.dataset.src)));
@@ -935,62 +933,9 @@ document.addEventListener("click",e=>{if(!e.target.closest(".autocomplete-wrappe
 function switchRain(btn,product){
   document.querySelectorAll('.rain-tab').forEach(b=>{b.style.color='var(--text2)';b.style.borderBottomColor='transparent';b.style.fontWeight='500'});
   btn.style.color='var(--accent)';btn.style.borderBottomColor='var(--accent)';btn.style.fontWeight='600';
-  const f=document.getElementById('rain-frame'),rm=document.getElementById('rain-map');if(!f||!rm)return;
-  if(product==='satelite'){
-    f.style.display='none';rm.style.display='block';
-    initRainMap(lastLat,lastLon);
-    return;
-  }
-  f.style.display='block';rm.style.display='none';
+  const f=document.getElementById('rain-frame');if(!f)return;
   const overlay=product==='radar'?'radar':'rain';
   f.src=`https://embed.windy.com/embed2.html?lat=${lastLat}&lon=${lastLon}&zoom=8&level=surface&overlay=${overlay}&product=${product}&menu=&message=1&marker=1&calendar=now&pressure=&type=map&location=coordinates&detail=&detailLat=${lastLat}&detailLon=${lastLon}`;
-}
-
-// Mapa "En vivo" (pestaña Prevision, no sustituye a Windy): nubes + lluvia
-// reales, las mismas fuentes que usa zoom.earth por debajo (no tiene API/
-// embed propio, asi que se va directo a sus fuentes) — EUMETSAT para nubes
-// (composicion RGB "European HRV", pensada para Europa, mejor encaje que
-// una vista mas global) y RainViewer para lluvia (uso personal/educativo,
-// atribucion obligatoria, ya incluida via el attribution del tileLayer).
-let RM=null,rainMapLat=null,rainMapLon=null;
-async function initRainMap(lat,lon){
-  if(RM){
-    if(lat!=null&&lon!=null&&(lat!==rainMapLat||lon!==rainMapLon)){rainMapLat=lat;rainMapLon=lon;RM.setView([lat,lon],7)}
-    setTimeout(()=>RM.invalidateSize(),50);
-    return;
-  }
-  rainMapLat=lat;rainMapLon=lon;
-  RM=L.map("rain-map",{attributionControl:true}).setView([lat??39.5,lon??-3],7);
-  L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",{attribution:'&copy; <a href="https://carto.com">CARTO</a>',maxZoom:19}).addTo(RM);
-
-  // Nubes: WMS de EUMETSAT (view.eumetsat.int), sin parametro "time" para
-  // que el propio servidor sirva siempre su ultimo dato disponible (~15 min).
-  const nubes=L.tileLayer.wms("https://view.eumetsat.int/geoserver/wms",{
-    layers:"msg_fes:rgb_eview",format:"image/png",transparent:true,version:"1.3.0",
-    crs:L.CRS.EPSG4326,opacity:0.85,attribution:"Nubes: EUMETSAT"
-  });
-
-  // Lluvia: RainViewer. La ruta del ultimo radar cambia cada pocos minutos,
-  // asi que se pide weather-maps.json en cada apertura del mapa.
-  let lluvia=null;
-  try{
-    const r=await fetch("https://api.rainviewer.com/public/weather-maps.json");
-    const d=await r.json();
-    const ultimo=d?.radar?.past?.slice(-1)[0];
-    if(ultimo){
-      lluvia=L.tileLayer(`${d.host}${ultimo.path}/256/{z}/{x}/{y}/2/1_1.png`,{
-        opacity:0.7,attribution:'Lluvia: <a href="https://www.rainviewer.com/">RainViewer</a>'
-      });
-    }
-  }catch(e){console.error("Error cargando radar RainViewer:",e)}
-
-  nubes.addTo(RM);
-  if(lluvia)lluvia.addTo(RM);
-  const overlays={"☁️ Nubes (EUMETSAT)":nubes};
-  if(lluvia)overlays["🌧️ Lluvia (RainViewer)"]=lluvia;
-  L.control.layers({},overlays,{collapsed:false,position:"topright"}).addTo(RM);
-
-  setTimeout(()=>RM.invalidateSize(),50);
 }
 
 document.getElementById("btn-gps").addEventListener("click",()=>{if(!navigator.geolocation){alert("Geolocalizacion no disponible");return}prog(5);
