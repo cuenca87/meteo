@@ -22,53 +22,51 @@
     border: 1px solid var(--panel-border); border-radius: 10px; backdrop-filter: blur(6px);
     box-shadow: 0 4px 20px rgba(0,0,0,0.4);
   }
+  /* Cabecera: una única barra fina (título + leyenda en línea) en vez de dos
+     paneles flotantes — pensada para el hueco pequeño (~340-460px de alto)
+     donde vive esto embebido dentro de la app de meteo, no para pantalla completa. */
   #cabecera {
-    top: 12px; left: 12px; right: 12px; padding: 10px 16px;
-    display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+    top: 8px; left: 8px; right: 8px; padding: 6px 12px;
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
   }
-  #cabecera h1 { font-size: 15px; margin: 0; font-weight: 600; letter-spacing: 0.2px; }
-  #cabecera .sub { font-size: 12px; color: var(--text-dim); }
+  #titulo { font-size: 12.5px; font-weight: 600; letter-spacing: 0.2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #leyendaInline { display: flex; align-items: center; gap: 6px; flex: none; }
+  #leyendaInline span { font-size: 10px; color: var(--text-dim); font-variant-numeric: tabular-nums; }
+  #rampa { width: 90px; height: 9px; border-radius: 5px; flex: none; }
   #controles {
-    bottom: 16px; left: 12px; right: 12px; padding: 10px 16px 14px;
-    display: flex; flex-direction: column; gap: 4px;
+    bottom: 8px; left: 8px; right: 8px; padding: 6px 12px 8px;
+    display: flex; flex-direction: column; gap: 2px;
   }
   #sliderWrap { position: relative; }
-  #slider { width: 100%; accent-color: var(--accent); display: block; }
-  #escalaTiempo { position: relative; height: 16px; margin: 0 2px; }
-  #escalaTiempo .marca { position: absolute; top: 0; transform: translateX(-50%); font-size: 10px; color: var(--text-dim); white-space: nowrap; }
+  #slider { width: 100%; accent-color: var(--accent); display: block; height: 16px; }
+  #escalaTiempo { position: relative; height: 13px; margin: 0 2px; }
+  #escalaTiempo .marca { position: absolute; top: 0; transform: translateX(-50%); font-size: 9px; color: var(--text-dim); white-space: nowrap; }
   #escalaTiempo .marca::before {
     content: ""; position: absolute; left: 50%; top: -4px; width: 1px; height: 4px; background: var(--panel-border);
   }
-  #filaControles { display: flex; align-items: center; gap: 12px; margin-top: 6px; }
+  #filaControles { display: flex; align-items: center; gap: 10px; margin-top: 2px; }
   #btnPlay {
-    background: var(--accent); border: none; color: #04222b; width: 38px; height: 38px; border-radius: 50%;
-    font-size: 15px; cursor: pointer; flex: none; display: flex; align-items: center; justify-content: center;
+    background: var(--accent); border: none; color: #04222b; width: 30px; height: 30px; border-radius: 50%;
+    font-size: 13px; cursor: pointer; flex: none; display: flex; align-items: center; justify-content: center;
   }
   #btnPlay:hover { filter: brightness(1.1); }
-  #horaActual { flex: 1; font-variant-numeric: tabular-nums; font-size: 13px; color: var(--text); text-align: right; }
-  #velocidad { background: transparent; color: var(--text-dim); border: 1px solid var(--panel-border); border-radius: 6px; font-size: 12px; padding: 4px 6px; }
-  #leyenda {
-    top: 68px; right: 12px; padding: 10px 12px; width: 200px;
-  }
-  #leyenda .titulo { font-size: 11px; color: var(--text-dim); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
-  #rampa { height: 12px; border-radius: 6px; }
-  #ticks { display: flex; justify-content: space-between; font-size: 11px; color: var(--text-dim); margin-top: 4px; font-variant-numeric: tabular-nums; }
-  .leaflet-control-attribution { font-size: 10px; }
+  #horaActual { flex: 1; font-variant-numeric: tabular-nums; font-size: 11.5px; color: var(--text); text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #velocidad { background: transparent; color: var(--text-dim); border: 1px solid var(--panel-border); border-radius: 6px; font-size: 11px; padding: 2px 4px; flex: none; }
+  .leaflet-control-attribution { font-size: 9px; }
+  .leaflet-top.leaflet-right, .leaflet-top.leaflet-left { margin-top: 40px; }
 </style>
 </head>
 <body>
 
 <div id="mapa"></div>
 
-<div id="cabecera" class="panel">
-  <h1 id="titulo">AROME</h1>
-  <div class="sub" id="ejecucionInfo">cargando…</div>
-</div>
-
-<div id="leyenda" class="panel">
-  <div class="titulo" id="leyendaTitulo">—</div>
-  <div id="rampa"></div>
-  <div id="ticks"></div>
+<div id="cabecera" class="panel" title="cargando…">
+  <div id="titulo">AROME</div>
+  <div id="leyendaInline">
+    <span id="tickMin">—</span>
+    <div id="rampa"></div>
+    <span id="tickMax">—</span>
+  </div>
 </div>
 
 <div id="controles" class="panel">
@@ -99,8 +97,7 @@ const DIR = `data/png_${parametro}/`;
 async function main() {
   const manifiesto = await fetch(DIR + "manifiesto.json").then(r => r.json());
   const info = PRESENTACION[parametro] || { emoji: "🗺️", nombre: parametro };
-  document.getElementById("titulo").textContent = `${info.emoji} AROME — ${info.nombre}`;
-  document.getElementById("leyendaTitulo").textContent = `${info.nombre} (${manifiesto.unidad})`;
+  document.getElementById("titulo").textContent = `${info.emoji} ${info.nombre}`;
   const [xmin, ymin, xmax, ymax] = manifiesto.bbox;
   const bounds = [[ymin, xmin], [ymax, xmax]];
 
@@ -120,7 +117,7 @@ async function main() {
   const horaActual = document.getElementById("horaActual");
   const btnPlay = document.getElementById("btnPlay");
   const velocidad = document.getElementById("velocidad");
-  const ejecucionInfo = document.getElementById("ejecucionInfo");
+  const cabecera = document.getElementById("cabecera");
 
   slider.max = manifiesto.frames.length - 1;
 
@@ -136,7 +133,7 @@ async function main() {
     slider.value = i;
   }
 
-  ejecucionInfo.textContent = `Modelo AROME (Météo-France) · ejecución ${manifiesto.ejecucion.slice(0,16).replace("T"," ")}Z · pronóstico horario a ${manifiesto.frames.length - 1} h`;
+  cabecera.title = `Modelo AROME (Météo-France) · ejecución ${manifiesto.ejecucion.slice(0,16).replace("T"," ")}Z · pronóstico horario a ${manifiesto.frames.length - 1} h`;
 
   let indice = 0;
   let reproduciendo = false;
@@ -187,20 +184,17 @@ async function main() {
     escalaTiempo.appendChild(marca);
   });
 
-  // Leyenda: rampa de color reconstruida a partir de las mismas paradas del render.
+  // Leyenda: rampa de color reconstruida a partir de las mismas paradas del
+  // render, en línea junto al título (min a la izquierda, max a la derecha).
   const paradas = manifiesto.paradasColor;
   const grad = paradas.map(p => `rgb(${p.color[0]},${p.color[1]},${p.color[2]}) ${((p.t - paradas[0].t) / (paradas[paradas.length-1].t - paradas[0].t) * 100).toFixed(0)}%`).join(", ");
   document.getElementById("rampa").style.background = `linear-gradient(90deg, ${grad})`;
-  const ticks = document.getElementById("ticks");
-  [paradas[0].t, paradas[Math.floor(paradas.length/2)].t, paradas[paradas.length-1].t].forEach(t => {
-    const span = document.createElement("span");
-    span.textContent = t;
-    ticks.appendChild(span);
-  });
+  document.getElementById("tickMin").textContent = paradas[0].t;
+  document.getElementById("tickMax").textContent = paradas[paradas.length - 1].t + manifiesto.unidad;
 }
 
 main().catch(err => {
-  document.getElementById("ejecucionInfo").textContent = "Error cargando datos: " + err.message;
+  document.getElementById("titulo").textContent = "Error cargando datos: " + err.message;
   console.error(err);
 });
 </script>

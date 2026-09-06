@@ -936,9 +936,11 @@ function switchRain(btn,product){
   btn.style.color='var(--accent)';btn.style.borderBottomColor='var(--accent)';btn.style.fontWeight='600';
   const f=document.getElementById('rain-frame');if(!f)return;
   if(product==='arome'){
+    f.style.height='460px';
     f.src=`arome/index.html?p=precipitacion`;
     return;
   }
+  f.style.height='340px';
   const overlay=product==='radar'?'radar':'rain';
   f.src=`https://embed.windy.com/embed2.html?lat=${lastLat}&lon=${lastLon}&zoom=8&level=surface&overlay=${overlay}&product=${product}&menu=&message=1&marker=1&calendar=now&pressure=&type=map&location=coordinates&detail=&detailLat=${lastLat}&detailLon=${lastLon}`;
 }
