@@ -440,7 +440,6 @@ async function loadForecast(src){
     html+=`<div class="card" style="padding:0;overflow:hidden;margin-top:8px">
       <div style="display:flex;border-bottom:1px solid var(--border)">
         <button class="rain-tab on" onclick="switchRain(this,'radar')" style="flex:1;padding:10px 4px;border:none;border-bottom:2px solid var(--accent);background:transparent;cursor:pointer;font-size:12px;font-weight:600;color:var(--accent)">🛰 Radar</button>
-        <button class="rain-tab" onclick="switchRain(this,'ecmwf')" style="flex:1;padding:10px 4px;border:none;border-bottom:2px solid transparent;background:transparent;cursor:pointer;font-size:12px;font-weight:500;color:var(--text2)">📅 Previsión 10d</button>
         <button class="rain-tab" onclick="switchRain(this,'arome')" style="flex:1;padding:10px 4px;border:none;border-bottom:2px solid transparent;background:transparent;cursor:pointer;font-size:12px;font-weight:500;color:var(--text2)">🌧️ AROME</button>
       </div>
       <iframe id="rain-frame"
