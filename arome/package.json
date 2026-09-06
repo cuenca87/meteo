@@ -1,0 +1,10 @@
+{
+  "name": "arome_animacion",
+  "version": "1.0.0",
+  "type": "module",
+  "private": true,
+  "dependencies": {
+    "geotiff": "^3.0.5",
+    "pngjs": "^7.0.0"
+  }
+}
