@@ -1,4 +1,4 @@
-const CACHE = "meteo-v20";
+const CACHE = "meteo-v21";
 const PRECACHE = ["./", "./index.html", "./icon.svg", "./manifest.json"];
 self.addEventListener("install", e => e.waitUntil(caches.open(CACHE).then(c => c.addAll(PRECACHE)).then(() => self.skipWaiting())));
 self.addEventListener("activate", e => e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim())));

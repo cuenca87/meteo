@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Animación AROME — España</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<style>
+  :root {
+    --bg: #0b1220;
+    --panel: #121b2e;
+    --panel-border: #22314d;
+    --text: #e8edf7;
+    --text-dim: #93a2c0;
+    --accent: #4dc9e6;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; height: 100%; background: var(--bg); color: var(--text); font-family: "Segoe UI", system-ui, sans-serif; }
+  #mapa { position: absolute; inset: 0; }
+  .panel {
+    position: absolute; z-index: 1000; background: rgba(18,27,46,0.92);
+    border: 1px solid var(--panel-border); border-radius: 10px; backdrop-filter: blur(6px);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+  }
+  #cabecera {
+    top: 12px; left: 12px; right: 12px; padding: 10px 16px;
+    display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+  }
+  #cabecera h1 { font-size: 15px; margin: 0; font-weight: 600; letter-spacing: 0.2px; }
+  #cabecera .sub { font-size: 12px; color: var(--text-dim); }
+  #controles {
+    bottom: 16px; left: 12px; right: 12px; padding: 10px 16px 14px;
+    display: flex; flex-direction: column; gap: 4px;
+  }
+  #sliderWrap { position: relative; }
+  #slider { width: 100%; accent-color: var(--accent); display: block; }
+  #escalaTiempo { position: relative; height: 16px; margin: 0 2px; }
+  #escalaTiempo .marca { position: absolute; top: 0; transform: translateX(-50%); font-size: 10px; color: var(--text-dim); white-space: nowrap; }
+  #escalaTiempo .marca::before {
+    content: ""; position: absolute; left: 50%; top: -4px; width: 1px; height: 4px; background: var(--panel-border);
+  }
+  #filaControles { display: flex; align-items: center; gap: 12px; margin-top: 6px; }
+  #btnPlay {
+    background: var(--accent); border: none; color: #04222b; width: 38px; height: 38px; border-radius: 50%;
+    font-size: 15px; cursor: pointer; flex: none; display: flex; align-items: center; justify-content: center;
+  }
+  #btnPlay:hover { filter: brightness(1.1); }
+  #horaActual { flex: 1; font-variant-numeric: tabular-nums; font-size: 13px; color: var(--text); text-align: right; }
+  #velocidad { background: transparent; color: var(--text-dim); border: 1px solid var(--panel-border); border-radius: 6px; font-size: 12px; padding: 4px 6px; }
+  #leyenda {
+    top: 68px; right: 12px; padding: 10px 12px; width: 200px;
+  }
+  #leyenda .titulo { font-size: 11px; color: var(--text-dim); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
+  #rampa { height: 12px; border-radius: 6px; }
+  #ticks { display: flex; justify-content: space-between; font-size: 11px; color: var(--text-dim); margin-top: 4px; font-variant-numeric: tabular-nums; }
+  .leaflet-control-attribution { font-size: 10px; }
+</style>
+</head>
+<body>
+
+<div id="mapa"></div>
+
+<div id="cabecera" class="panel">
+  <h1 id="titulo">AROME</h1>
+  <div class="sub" id="ejecucionInfo">cargando…</div>
+</div>
+
+<div id="leyenda" class="panel">
+  <div class="titulo" id="leyendaTitulo">—</div>
+  <div id="rampa"></div>
+  <div id="ticks"></div>
+</div>
+
+<div id="controles" class="panel">
+  <div id="sliderWrap">
+    <input id="slider" type="range" min="0" max="0" value="0" step="1">
+    <div id="escalaTiempo"></div>
+  </div>
+  <div id="filaControles">
+    <button id="btnPlay">▶</button>
+    <select id="velocidad">
+      <option value="600">Lento</option>
+      <option value="300" selected>Normal</option>
+      <option value="120">Rápido</option>
+    </select>
+    <div id="horaActual">—</div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const PRESENTACION = {
+  temperatura: { emoji: "🌡️", nombre: "Temperatura a 2 m" },
+  precipitacion: { emoji: "🌧️", nombre: "Precipitación horaria" },
+};
+const parametro = new URLSearchParams(location.search).get("p") || "precipitacion";
+const DIR = `data/png_${parametro}/`;
+
+async function main() {
+  const manifiesto = await fetch(DIR + "manifiesto.json").then(r => r.json());
+  const info = PRESENTACION[parametro] || { emoji: "🗺️", nombre: parametro };
+  document.getElementById("titulo").textContent = `${info.emoji} AROME — ${info.nombre}`;
+  document.getElementById("leyendaTitulo").textContent = `${info.nombre} (${manifiesto.unidad})`;
+  const [xmin, ymin, xmax, ymax] = manifiesto.bbox;
+  const bounds = [[ymin, xmin], [ymax, xmax]];
+
+  const mapa = L.map("mapa", { zoomControl: true, attributionControl: true }).fitBounds(bounds, { padding: [20, 20] });
+
+  L.tileLayer("https://services.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}", {
+    attribution: "Esri, HERE, Garmin, FAO, NOAA, USGS",
+    maxZoom: 16,
+  }).addTo(mapa);
+
+  const overlay = L.imageOverlay(DIR + manifiesto.frames[0].archivo, bounds, { opacity: 0.9, interactive: false }).addTo(mapa);
+
+  // Precarga de imágenes para que el scrubbing/reproducción no parpadee.
+  manifiesto.frames.forEach(f => { const img = new Image(); img.src = DIR + f.archivo; });
+
+  const slider = document.getElementById("slider");
+  const horaActual = document.getElementById("horaActual");
+  const btnPlay = document.getElementById("btnPlay");
+  const velocidad = document.getElementById("velocidad");
+  const ejecucionInfo = document.getElementById("ejecucionInfo");
+
+  slider.max = manifiesto.frames.length - 1;
+
+  const fmtHora = new Intl.DateTimeFormat("es-ES", {
+    weekday: "short", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit",
+    timeZone: "Europe/Madrid",
+  });
+
+  function pintarFrame(i) {
+    const f = manifiesto.frames[i];
+    overlay.setUrl(DIR + f.archivo);
+    horaActual.textContent = fmtHora.format(new Date(f.hora)) + " (hora local)";
+    slider.value = i;
+  }
+
+  ejecucionInfo.textContent = `Modelo AROME (Météo-France) · ejecución ${manifiesto.ejecucion.slice(0,16).replace("T"," ")}Z · pronóstico horario a ${manifiesto.frames.length - 1} h`;
+
+  let indice = 0;
+  let reproduciendo = false;
+  let temporizador = null;
+
+  function siguienteFrame() {
+    indice = (indice + 1) % manifiesto.frames.length;
+    pintarFrame(indice);
+  }
+
+  function iniciar() {
+    reproduciendo = true;
+    btnPlay.textContent = "⏸";
+    temporizador = setInterval(siguienteFrame, Number(velocidad.value));
+  }
+  function detener() {
+    reproduciendo = false;
+    btnPlay.textContent = "▶";
+    clearInterval(temporizador);
+  }
+
+  btnPlay.addEventListener("click", () => reproduciendo ? detener() : iniciar());
+  velocidad.addEventListener("change", () => { if (reproduciendo) { detener(); iniciar(); } });
+  slider.addEventListener("input", () => {
+    detener();
+    indice = Number(slider.value);
+    pintarFrame(indice);
+  });
+
+  pintarFrame(0);
+  iniciar();
+
+  // Escala de tiempo: una marca cada 6 horas, con el día de la semana cuando
+  // cae en la medianoche (hora local) para no perder la referencia del día.
+  const escalaTiempo = document.getElementById("escalaTiempo");
+  const fmtHoraCorta = new Intl.DateTimeFormat("es-ES", { hour: "2-digit", hour12: false, timeZone: "Europe/Madrid" });
+  const fmtDiaSemana = new Intl.DateTimeFormat("es-ES", { weekday: "short", timeZone: "Europe/Madrid" });
+  const PASO_MARCA = 6;
+  manifiesto.frames.forEach((f, i) => {
+    const esUltima = i === manifiesto.frames.length - 1;
+    if (i % PASO_MARCA !== 0 && !esUltima) return;
+    const d = new Date(f.hora);
+    const horaLocal = fmtHoraCorta.format(d);
+    const marca = document.createElement("div");
+    marca.className = "marca";
+    marca.style.left = (i / (manifiesto.frames.length - 1) * 100) + "%";
+    marca.textContent = horaLocal === "00" ? fmtDiaSemana.format(d) : horaLocal + "h";
+    escalaTiempo.appendChild(marca);
+  });
+
+  // Leyenda: rampa de color reconstruida a partir de las mismas paradas del render.
+  const paradas = manifiesto.paradasColor;
+  const grad = paradas.map(p => `rgb(${p.color[0]},${p.color[1]},${p.color[2]}) ${((p.t - paradas[0].t) / (paradas[paradas.length-1].t - paradas[0].t) * 100).toFixed(0)}%`).join(", ");
+  document.getElementById("rampa").style.background = `linear-gradient(90deg, ${grad})`;
+  const ticks = document.getElementById("ticks");
+  [paradas[0].t, paradas[Math.floor(paradas.length/2)].t, paradas[paradas.length-1].t].forEach(t => {
+    const span = document.createElement("span");
+    span.textContent = t;
+    ticks.appendChild(span);
+  });
+}
+
+main().catch(err => {
+  document.getElementById("ejecucionInfo").textContent = "Error cargando datos: " + err.message;
+  console.error(err);
+});
+</script>
+
+</body>
+</html>

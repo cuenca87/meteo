@@ -1,0 +1,43 @@
+name: Actualizar animación AROME
+
+on:
+  schedule:
+    # AROME publica ejecución nueva cada 3h (00/03/06/09/12/15/18/21 UTC).
+    # Se lanza a los 40 min para dar margen a que Météo-France la haya publicado.
+    - cron: "40 0,3,6,9,12,15,18,21 * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  actualizar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Instalar dependencias
+        working-directory: arome
+        run: npm install geotiff pngjs
+
+      - name: Descargar y renderizar precipitación
+        working-directory: arome
+        env:
+          METEOFRANCE_BASIC_AUTH: ${{ secrets.METEOFRANCE_BASIC_AUTH }}
+        run: |
+          rm -rf data/frames_precipitacion data/png_precipitacion
+          node fetch-arome.js precipitacion
+          node render-frames.js precipitacion
+          rm -rf data/frames_precipitacion
+
+      - name: Publicar cambios
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add arome/data/png_precipitacion
+          git diff --cached --quiet || git commit -m "Actualiza animación AROME (precipitación)"
+          git push
