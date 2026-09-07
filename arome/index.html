@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Animación AROME — España</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet-velocity@2.1.4/dist/leaflet-velocity.css" />
 <style>
   :root {
     --bg: #0b1220;
@@ -86,13 +87,30 @@
 </div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/leaflet-velocity@2.1.4/dist/leaflet-velocity.js"></script>
 <script>
 const PRESENTACION = {
   temperatura: { emoji: "🌡️", nombre: "Temperatura a 2 m" },
   precipitacion: { emoji: "🌧️", nombre: "Precipitación horaria" },
+  viento: { emoji: "🍃", nombre: "Viento a 10 m" },
 };
+// Rampa de color propia del viento (m/s) — leaflet-velocity solo acepta un
+// array plano de colores repartidos a partes iguales entre 0 y maxVelocity,
+// así que estas mismas paradas sirven para construir la leyenda Y como
+// colorScale de la capa (mismo criterio visual en los dos sitios).
+const MAX_VEL_VIENTO = 20; // m/s (~72 km/h) — techo de la escala de color
+const PARADAS_VIENTO = [
+  { t: 0, color: [70, 130, 220] },
+  { t: 4, color: [70, 190, 190] },
+  { t: 8, color: [110, 200, 90] },
+  { t: 12, color: [230, 210, 60] },
+  { t: 16, color: [230, 140, 50] },
+  { t: 20, color: [210, 60, 60] },
+];
+
 const parametro = new URLSearchParams(location.search).get("p") || "precipitacion";
-const DIR = `data/png_${parametro}/`;
+const esViento = parametro === "viento";
+const DIR = esViento ? "data/viento/" : `data/png_${parametro}/`;
 
 async function main() {
   const manifiesto = await fetch(DIR + "manifiesto.json").then(r => r.json());
@@ -108,16 +126,60 @@ async function main() {
     maxZoom: 16,
   }).addTo(mapa);
 
-  const overlay = L.imageOverlay(DIR + manifiesto.frames[0].archivo, bounds, { opacity: 0.9, interactive: false }).addTo(mapa);
+  // Viento: campo vectorial animado (leaflet-velocity, dibuja partículas en
+  // su propio <canvas>), no hay imagen que pintar. Resto de parámetros:
+  // overlay de imagen ya coloreada (mismo mecanismo de siempre).
+  let overlay = null, capaViento = null;
+  const cacheViento = new Map(); // hora-índice -> JSON ya descargado, para que el scrubbing no repita peticiones
+  if (esViento) {
+    capaViento = L.velocityLayer({
+      displayValues: false,
+      maxVelocity: MAX_VEL_VIENTO,
+      velocityScale: 0.012,
+      lineWidth: 1.2,
+      particleAge: 90,
+      particleMultiplier: 1 / 60,
+      colorScale: PARADAS_VIENTO.map(p => `rgb(${p.color.join(",")})`),
+    }).addTo(mapa);
+  } else {
+    overlay = L.imageOverlay(DIR + manifiesto.frames[0].archivo, bounds, { opacity: 0.9, interactive: false }).addTo(mapa);
+    // Precarga de imágenes para que el scrubbing/reproducción no parpadee.
+    manifiesto.frames.forEach(f => { const img = new Image(); img.src = DIR + f.archivo; });
+  }
 
-  // Precarga de imágenes para que el scrubbing/reproducción no parpadee.
-  manifiesto.frames.forEach(f => { const img = new Image(); img.src = DIR + f.archivo; });
+  async function cargarViento(i) {
+    if (cacheViento.has(i)) return cacheViento.get(i);
+    const campo = await fetch(DIR + manifiesto.frames[i].archivo).then(r => r.json());
+    cacheViento.set(i, campo);
+    return campo;
+  }
+  // Precarga de TODOS los JSON de viento en paralelo nada más cargar: a
+  // diferencia de las imágenes (setUrl es casi instantáneo), cada frame de
+  // viento son ~200KB que hay que descargar + parsear — con reproducción a
+  // velocidad normal (300ms/frame) esa descarga no llega a tiempo y las
+  // partículas se quedan en blanco (visto en pruebas). Con todo cacheado de
+  // antemano, cargarViento(i) resuelve al instante durante la reproducción.
+  if (esViento) manifiesto.frames.forEach((f, i) => cargarViento(i));
 
   const slider = document.getElementById("slider");
   const horaActual = document.getElementById("horaActual");
   const btnPlay = document.getElementById("btnPlay");
   const velocidad = document.getElementById("velocidad");
   const cabecera = document.getElementById("cabecera");
+
+  // El viento necesita intervalos mucho más largos que un simple cambio de
+  // imagen: cada setData() resetea el sistema de partículas de
+  // leaflet-velocity a cero y tarda más de 1,2s en volver a verse "lleno"
+  // (medido en pruebas) — con los intervalos rápidos de precipitación/
+  // temperatura (120-600ms) nunca llega a estabilizarse y parpadea en
+  // blanco. Se repueblan las opciones del selector solo para este caso.
+  if (esViento) {
+    velocidad.innerHTML = `
+      <option value="4000">Lento</option>
+      <option value="2500" selected>Normal</option>
+      <option value="1500">Rápido</option>
+    `;
+  }
 
   slider.max = manifiesto.frames.length - 1;
 
@@ -126,11 +188,19 @@ async function main() {
     timeZone: "Europe/Madrid",
   });
 
-  function pintarFrame(i) {
+  let peticionViento = 0; // descarta respuestas que lleguen tarde si el usuario ya movió el slider
+  async function pintarFrame(i) {
     const f = manifiesto.frames[i];
-    overlay.setUrl(DIR + f.archivo);
     horaActual.textContent = fmtHora.format(new Date(f.hora)) + " (hora local)";
     slider.value = i;
+    if (esViento) {
+      const miPeticion = ++peticionViento;
+      const campo = await cargarViento(i);
+      if (miPeticion !== peticionViento) return;
+      capaViento.setData(campo);
+    } else {
+      overlay.setUrl(DIR + f.archivo);
+    }
   }
 
   cabecera.title = `Modelo AROME (Météo-France) · ejecución ${manifiesto.ejecucion.slice(0,16).replace("T"," ")}Z · pronóstico horario a ${manifiesto.frames.length - 1} h`;
@@ -186,11 +256,15 @@ async function main() {
 
   // Leyenda: rampa de color reconstruida a partir de las mismas paradas del
   // render, en línea junto al título (min a la izquierda, max a la derecha).
-  const paradas = manifiesto.paradasColor;
+  // Viento no trae paradasColor en su manifiesto (no hay imagen coloreada
+  // que describir) — usa las mismas PARADAS_VIENTO que ya se pasaron como
+  // colorScale a la capa, así la leyenda y las partículas coinciden.
+  const paradas = esViento ? PARADAS_VIENTO : manifiesto.paradasColor;
+  const unidad = esViento ? " m/s" : manifiesto.unidad;
   const grad = paradas.map(p => `rgb(${p.color[0]},${p.color[1]},${p.color[2]}) ${((p.t - paradas[0].t) / (paradas[paradas.length-1].t - paradas[0].t) * 100).toFixed(0)}%`).join(", ");
   document.getElementById("rampa").style.background = `linear-gradient(90deg, ${grad})`;
   document.getElementById("tickMin").textContent = paradas[0].t;
-  document.getElementById("tickMax").textContent = paradas[paradas.length - 1].t + manifiesto.unidad;
+  document.getElementById("tickMax").textContent = paradas[paradas.length - 1].t + unidad;
 }
 
 main().catch(err => {

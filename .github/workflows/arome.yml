@@ -42,10 +42,20 @@ jobs:
           node render-frames.js precipitacion
           rm -rf data/frames_precipitacion
 
+      - name: Descargar y renderizar viento
+        working-directory: arome
+        env:
+          METEOFRANCE_BASIC_AUTH: ${{ secrets.METEOFRANCE_BASIC_AUTH }}
+        run: |
+          rm -rf data/frames_viento
+          node fetch-viento.js
+          node render-viento.js
+          rm -rf data/frames_viento
+
       - name: Publicar cambios
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add arome/data/png_precipitacion
-          git diff --cached --quiet || git commit -m "Actualiza animación AROME (precipitación)"
+          git add arome/data/png_precipitacion arome/data/viento
+          git diff --cached --quiet || git commit -m "Actualiza animación AROME (precipitación + viento)"
           git push
