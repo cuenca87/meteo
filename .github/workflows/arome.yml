@@ -32,7 +32,16 @@ jobs:
         working-directory: arome
         run: npm install geotiff pngjs
 
+      # continue-on-error en los dos pasos de datos: un fallo transitorio de
+      # la API de Météo-France en UNO de los dos parámetros (visto en vivo:
+      # GetCapabilities devolvió el listado sin el viento un rato, se
+      # recuperó sola en el siguiente ciclo) no debe impedir publicar lo que
+      # sí se consiguió del otro — antes, si viento fallaba, el job entero
+      # abortaba y el paso "Publicar cambios" ni se ejecutaba, perdiendo
+      # también los cambios de precipitación de esa pasada.
       - name: Descargar y renderizar precipitación
+        id: precipitacion
+        continue-on-error: true
         working-directory: arome
         env:
           METEOFRANCE_BASIC_AUTH: ${{ secrets.METEOFRANCE_BASIC_AUTH }}
@@ -43,6 +52,8 @@ jobs:
           rm -rf data/frames_precipitacion
 
       - name: Descargar y renderizar viento
+        id: viento
+        continue-on-error: true
         working-directory: arome
         env:
           METEOFRANCE_BASIC_AUTH: ${{ secrets.METEOFRANCE_BASIC_AUTH }}
@@ -53,9 +64,18 @@ jobs:
           rm -rf data/frames_viento
 
       - name: Publicar cambios
+        if: always()
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add arome/data/png_precipitacion arome/data/viento
           git diff --cached --quiet || git commit -m "Actualiza animación AROME (precipitación + viento)"
           git push
+
+      # Si alguno de los dos pasos anteriores falló de verdad (no solo un
+      # hueco de horas pendiente, eso no es fallo), marcar el job en rojo
+      # igualmente para que salte el aviso por correo — continue-on-error
+      # solo evita que bloquee el commit, no debe ocultar el fallo.
+      - name: Marcar el job como fallido si algún paso de datos falló
+        if: steps.precipitacion.outcome == 'failure' || steps.viento.outcome == 'failure'
+        run: exit 1

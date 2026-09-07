@@ -24,20 +24,37 @@ export async function obtenerToken(basicAuth) {
 // del modelo agrupa TODAS las horas de pronóstico como eje "time" interno).
 // El sufijo distingue variantes de acumulación (p.ej. "_PT1H" = precipitación
 // acumulada en cada hora, frente a "_PT3H"/"_P1D" = ventanas más largas).
-export async function obtenerUltimaEjecucion(token, parametro, sufijo = "") {
-  const url = `${WCS_BASE}/GetCapabilities?service=WCS&version=2.0.1`;
-  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
-  if (!res.ok) throw new Error(`GetCapabilities: HTTP ${res.status}`);
-  const xml = await res.text();
-  const re = new RegExp(`<wcs:CoverageId>(${parametro}___([0-9T:.-]+Z)${sufijo})</wcs:CoverageId>`, "g");
-  let ultima = null;
-  let m;
-  while ((m = re.exec(xml))) {
-    const [, coverageId, timestamp] = m;
-    if (!ultima || timestamp > ultima.timestamp) ultima = { coverageId, timestamp };
+//
+// Reintenta un par de veces antes de rendirse: visto en vivo que
+// GetCapabilities a veces devuelve el listado sin un parámetro concreto
+// (viento) de forma puntual, recuperándose sola segundos/minutos después —
+// no vale la pena abortar todo el pipeline por un hueco así de corto.
+export async function obtenerUltimaEjecucion(token, parametro, sufijo = "", intentos = 3) {
+  let ultimoError;
+  for (let intento = 1; intento <= intentos; intento++) {
+    try {
+      const url = `${WCS_BASE}/GetCapabilities?service=WCS&version=2.0.1`;
+      const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+      if (!res.ok) throw new Error(`GetCapabilities: HTTP ${res.status}`);
+      const xml = await res.text();
+      const re = new RegExp(`<wcs:CoverageId>(${parametro}___([0-9T:.-]+Z)${sufijo})</wcs:CoverageId>`, "g");
+      let ultima = null;
+      let m;
+      while ((m = re.exec(xml))) {
+        const [, coverageId, timestamp] = m;
+        if (!ultima || timestamp > ultima.timestamp) ultima = { coverageId, timestamp };
+      }
+      if (!ultima) throw new Error(`No se encontró ninguna cobertura para ${parametro}${sufijo}`);
+      return ultima;
+    } catch (err) {
+      ultimoError = err;
+      if (intento < intentos) {
+        console.warn(`  [aviso] obtenerUltimaEjecucion(${parametro}${sufijo}) intento ${intento}/${intentos} falló: ${err.message} — reintentando en 15s`);
+        await new Promise((r) => setTimeout(r, 15000));
+      }
+    }
   }
-  if (!ultima) throw new Error(`No se encontró ninguna cobertura para ${parametro}${sufijo}`);
-  return ultima;
+  throw ultimoError;
 }
 
 export async function describirCobertura(token, coverageId) {
