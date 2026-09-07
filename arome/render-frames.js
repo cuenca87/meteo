@@ -2,7 +2,8 @@
 // temperatura) + genera un manifiesto JSON con metadatos de cada frame para
 // que el visor HTML los pueda animar sin decodificar GeoTIFF en el navegador.
 
-import { readdir, mkdir, writeFile, readFile } from "node:fs/promises";
+import { readdir, mkdir, writeFile, readFile, unlink } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import { fromArrayBuffer } from "geotiff";
 import { PNG } from "pngjs";
 
@@ -125,8 +126,29 @@ async function main() {
   const meta = JSON.parse(await readFile(`${dirEntrada}/_meta.json`, "utf8"));
   const ficheros = (await readdir(dirEntrada)).filter((f) => f.endsWith(".tiff")).sort();
 
-  const frames = [];
-  let bboxGlobal = null;
+  // Frames ya publicados en una pasada anterior del workflow (mismo run u
+  // otro más reciente): se conservan los que aún no han pasado, se sueltan
+  // los que ya quedaron atrás en el tiempo (la animación siempre mira hacia
+  // delante, no acumula histórico), y sus PNG huérfanos se borran del disco
+  // para que no se cuelen en el commit.
+  const manifiestoPath = `${dirSalida}/manifiesto.json`;
+  let framesPrevios = [];
+  let bboxPrevio = null;
+  if (existsSync(manifiestoPath)) {
+    const previo = JSON.parse(await readFile(manifiestoPath, "utf8"));
+    bboxPrevio = previo.bbox ?? null;
+    const ahora = Date.now();
+    for (const f of previo.frames || []) {
+      if (new Date(f.hora).getTime() >= ahora) {
+        framesPrevios.push(f);
+      } else {
+        await unlink(`${dirSalida}/${f.archivo}`).catch(() => {});
+      }
+    }
+  }
+
+  const frames = [...framesPrevios];
+  let bboxGlobal = bboxPrevio;
   for (const fichero of ficheros) {
     const horaISO = fichero.replace(/\.tiff$/, "").replace(/(\d{2})-(\d{2})-(\d{2})Z$/, "$1:$2:$3Z");
     const { png, width, height, bbox, min, max } = await tiffAPng(`${dirEntrada}/${fichero}`, rampa.paradas);
@@ -138,16 +160,23 @@ async function main() {
     console.log(`  [ok] ${horaISO} -> ${nombrePng} (${(bufferPng.length / 1024).toFixed(0)} KB, ${width}x${height}, ${min.toFixed(1)}..${max.toFixed(1)} ${rampa.unidad})`);
   }
 
-  await writeFile(`${dirSalida}/manifiesto.json`, JSON.stringify({
+  // Por si una hora llegara a descargarse dos veces (no debería, fetch-arome
+  // ya evita re-pedir horas ya renderizadas), nos quedamos con una entrada
+  // por hora y ordenamos cronológicamente antes de escribir el manifiesto.
+  const porHora = new Map();
+  for (const f of frames) porHora.set(f.hora, f);
+  const framesFinal = [...porHora.values()].sort((a, b) => a.hora.localeCompare(b.hora));
+
+  await writeFile(manifiestoPath, JSON.stringify({
     parametro: nombreParam,
     unidad: rampa.unidad,
     ejecucion: meta.ejecucion,
     bbox: bboxGlobal,
     paradasColor: rampa.paradas,
-    frames,
+    frames: framesFinal,
   }, null, 2));
 
-  console.log(`\n${frames.length} frames renderizados en ${dirSalida}/`);
+  console.log(`\n${ficheros.length} frames nuevos + ${framesPrevios.length} conservados de antes = ${framesFinal.length} frames totales en ${dirSalida}/`);
 }
 
 main().catch((err) => {

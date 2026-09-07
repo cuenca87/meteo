@@ -2,6 +2,13 @@
 // modelo disponible) para un dominio fijo (cornisa cantábrica) y los guarda
 // en data/frames_<parametro>/. Reintentable: si un fichero ya existe, se
 // omite, así que puede relanzarse tras un corte de red sin perder lo hecho.
+//
+// Solo pide las horas que AÚN NO están renderizadas en data/png_<parametro>/
+// (ver manifiesto.json ahí) — Météo-France publica las horas largas del
+// pronóstico (+31h a +51h) bastante después que las cortas, así que el mismo
+// run se completa en varias pasadas del workflow en vez de descartar lo ya
+// conseguido y reintentar solo lo que falta cada vez (ver render-frames.js
+// para la parte que conserva/poda frames entre pasadas).
 
 import { mkdir, writeFile, readFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
@@ -36,6 +43,17 @@ function listaHorasEntre(inicioISO, finISO) {
   return horas;
 }
 
+async function horasYaRenderizadas(nombreParam) {
+  const manifiestoPath = `data/png_${nombreParam}/manifiesto.json`;
+  if (!existsSync(manifiestoPath)) return new Set();
+  try {
+    const manifiesto = JSON.parse(await readFile(manifiestoPath, "utf8"));
+    return new Set((manifiesto.frames || []).map((f) => f.hora));
+  } catch {
+    return new Set();
+  }
+}
+
 async function main() {
   const nombreParam = process.argv[2] || "temperatura";
   const param = PARAMETROS[nombreParam];
@@ -58,7 +76,9 @@ async function main() {
   console.log(`Rango de pronóstico: ${inicio} .. ${fin}`);
 
   const horas = listaHorasEntre(inicio, fin);
-  console.log(`${horas.length} horas a descargar`);
+  const yaRenderizadas = await horasYaRenderizadas(nombreParam);
+  const horasPendientes = horas.filter((h) => !yaRenderizadas.has(h));
+  console.log(`${horas.length} horas en el rango de pronóstico, ${yaRenderizadas.size} ya renderizadas de una pasada anterior, ${horasPendientes.length} pendientes de descargar`);
 
   const dirSalida = `data/frames_${nombreParam}`;
   await mkdir(dirSalida, { recursive: true });
@@ -66,7 +86,7 @@ async function main() {
   const metaPath = `${dirSalida}/_meta.json`;
   await writeFile(metaPath, JSON.stringify({ coverageId, ejecucion, inicio, fin, bbox: param.bbox, altura: param.altura }, null, 2));
 
-  for (const hora of horas) {
+  for (const hora of horasPendientes) {
     const destino = `${dirSalida}/${hora.replace(/:/g, "-")}.tiff`;
     if (existsSync(destino)) {
       console.log(`  [saltado] ${hora} (ya existe)`);

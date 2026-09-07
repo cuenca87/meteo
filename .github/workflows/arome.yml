@@ -3,8 +3,16 @@ name: Actualizar animación AROME
 on:
   schedule:
     # AROME publica ejecución nueva cada 3h (00/03/06/09/12/15/18/21 UTC).
-    # Se lanza a los 40 min para dar margen a que Météo-France la haya publicado.
+    # Dos pasadas por ejecución del modelo, mismo job (fetch-arome.js solo
+    # pide lo que aún falte, ver ese fichero):
+    #  - a los 40 min: da tiempo a que Météo-France publique el run, pero a
+    #    esa hora solo suele haber ~30h de pronóstico horario disponibles.
+    #  - a las 2h40 (horas largas, +31h..+51h, tardan más en publicarse;
+    #    confirmado en vivo que a partir de +3h ya está todo el rango) —
+    #    justo antes de que el siguiente run (3h después) pase a ser "el
+    #    último" y deje de poder completarse este.
     - cron: "40 0,3,6,9,12,15,18,21 * * *"
+    - cron: "40 2,5,8,11,14,17,20,23 * * *"
   workflow_dispatch: {}
 
 permissions:
@@ -29,7 +37,7 @@ jobs:
         env:
           METEOFRANCE_BASIC_AUTH: ${{ secrets.METEOFRANCE_BASIC_AUTH }}
         run: |
-          rm -rf data/frames_precipitacion data/png_precipitacion
+          rm -rf data/frames_precipitacion
           node fetch-arome.js precipitacion
           node render-frames.js precipitacion
           rm -rf data/frames_precipitacion
