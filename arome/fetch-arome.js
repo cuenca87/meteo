@@ -30,6 +30,10 @@ const BBOX_CANTABRICO = [-9.3, 41.8, -1.6, 44.3];
 const PARAMETROS = {
   temperatura: { coverage: "TEMPERATURE__SPECIFIC_HEIGHT_LEVEL_ABOVE_GROUND", altura: 2, bbox: BBOX_ESPANA },
   precipitacion: { coverage: "TOTAL_PRECIPITATION__GROUND_OR_WATER_SURFACE", sufijo: "_PT1H", bbox: BBOX_ESPANA },
+  // Nubosidad total (%), instantánea (sin sufijo de acumulación) y sin
+  // dimensión "height" (es GROUND_OR_WATER_SURFACE, no
+  // SPECIFIC_HEIGHT_LEVEL_ABOVE_GROUND) — verificado en vivo, valores 0-100.
+  nubosidad: { coverage: "TOTAL_CLOUD_COVER__GROUND_OR_WATER_SURFACE", bbox: BBOX_ESPANA },
 };
 
 function listaHorasEntre(inicioISO, finISO) {
