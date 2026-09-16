@@ -50,8 +50,14 @@ const PARADAS_NUBOSIDAD = [
   { t: 100, color: [188, 196, 208], a: 225 },
 ];
 
+// conEtiquetas: además de la imagen coloreada, guarda una rejilla de valores
+// numéricos muestreados (para mostrar el número encima del mapa, a petición
+// del usuario) — solo tiene sentido para temperatura por ahora (un número
+// suelto de precipitación/nubosidad en un punto es mucho menos legible/útil
+// que el propio color, y encarecería el manifiesto de los otros dos sin que
+// se haya pedido).
 const RAMPAS = {
-  temperatura: { paradas: PARADAS_TEMP, unidad: "°C" },
+  temperatura: { paradas: PARADAS_TEMP, unidad: "°C", conEtiquetas: true },
   precipitacion: { paradas: PARADAS_PRECIP, unidad: "mm/h" },
   nubosidad: { paradas: PARADAS_NUBOSIDAD, unidad: "%" },
 };
@@ -89,7 +95,31 @@ function colorEnRampa(v, paradas) {
 // cada tanda de frames moderado.
 const DIEZMADO = 2;
 
-async function tiffAPng(rutaTiff, paradas) {
+// Rejilla de etiquetas numéricas: se muestrea sobre el raster ORIGINAL (sin
+// el diezmado de arriba, que es solo para la imagen), cada PASO_ETIQUETAS_PX
+// píxeles nativos (~0.01°/px) — con 30px de paso salen ~0.3°/~33km entre
+// puntos. El cliente decide cuántos de estos puntos pintar según el zoom
+// (más densidad al acercar), así que aquí conviene generar de sobra: es
+// mucho más barato guardar puntos de más en el JSON que tener que reprocesar
+// el GeoTIFF si luego hiciera falta más densidad.
+const PASO_ETIQUETAS_PX = 30;
+
+function extraerRejillaEtiquetas(raster, widthOrig, heightOrig, pasoPx) {
+  const cols = Math.floor((widthOrig - 1) / pasoPx) + 1;
+  const filas = Math.floor((heightOrig - 1) / pasoPx) + 1;
+  const valores = new Array(cols * filas);
+  for (let fy = 0; fy < filas; fy++) {
+    const ySrc = Math.min(fy * pasoPx, heightOrig - 1);
+    for (let fx = 0; fx < cols; fx++) {
+      const xSrc = Math.min(fx * pasoPx, widthOrig - 1);
+      const v = raster[ySrc * widthOrig + xSrc];
+      valores[fy * cols + fx] = (v === 9999 || !Number.isFinite(v)) ? null : Math.round(v);
+    }
+  }
+  return { cols, filas, valores };
+}
+
+async function tiffAPng(rutaTiff, paradas, conEtiquetas) {
   const buf = await readFile(rutaTiff);
   const tiff = await fromArrayBuffer(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength));
   const image = await tiff.getImage();
@@ -129,7 +159,9 @@ async function tiffAPng(rutaTiff, paradas) {
     }
   }
 
-  return { png, width, height, bbox, min, max };
+  const rejilla = conEtiquetas ? extraerRejillaEtiquetas(raster, widthOrig, heightOrig, PASO_ETIQUETAS_PX) : null;
+
+  return { png, width, height, bbox, min, max, rejilla };
 }
 
 async function main() {
@@ -154,9 +186,11 @@ async function main() {
   const manifiestoPath = `${dirSalida}/manifiesto.json`;
   let framesPrevios = [];
   let bboxPrevio = null;
+  let rejillaPrevia = null;
   if (existsSync(manifiestoPath)) {
     const previo = JSON.parse(await readFile(manifiestoPath, "utf8"));
     bboxPrevio = previo.bbox ?? null;
+    rejillaPrevia = previo.rejillaEtiquetas ?? null;
     const ahora = Date.now();
     for (const f of previo.frames || []) {
       if (new Date(f.hora).getTime() >= ahora) {
@@ -169,14 +203,20 @@ async function main() {
 
   const frames = [...framesPrevios];
   let bboxGlobal = bboxPrevio;
+  let rejillaGlobal = rejillaPrevia;
   for (const fichero of ficheros) {
     const horaISO = fichero.replace(/\.tiff$/, "").replace(/(\d{2})-(\d{2})-(\d{2})Z$/, "$1:$2:$3Z");
-    const { png, width, height, bbox, min, max } = await tiffAPng(`${dirEntrada}/${fichero}`, rampa.paradas);
+    const { png, width, height, bbox, min, max, rejilla } = await tiffAPng(`${dirEntrada}/${fichero}`, rampa.paradas, rampa.conEtiquetas);
     bboxGlobal = bbox;
     const nombrePng = fichero.replace(/\.tiff$/, ".png");
     const bufferPng = PNG.sync.write(png);
     await writeFile(`${dirSalida}/${nombrePng}`, bufferPng);
-    frames.push({ hora: horaISO, archivo: nombrePng, min: Number(min.toFixed(1)), max: Number(max.toFixed(1)) });
+    const frame = { hora: horaISO, archivo: nombrePng, min: Number(min.toFixed(1)), max: Number(max.toFixed(1)) };
+    if (rejilla) {
+      rejillaGlobal = { cols: rejilla.cols, filas: rejilla.filas };
+      frame.etiquetas = rejilla.valores;
+    }
+    frames.push(frame);
     console.log(`  [ok] ${horaISO} -> ${nombrePng} (${(bufferPng.length / 1024).toFixed(0)} KB, ${width}x${height}, ${min.toFixed(1)}..${max.toFixed(1)} ${rampa.unidad})`);
   }
 
@@ -187,12 +227,18 @@ async function main() {
   for (const f of frames) porHora.set(f.hora, f);
   const framesFinal = [...porHora.values()].sort((a, b) => a.hora.localeCompare(b.hora));
 
+  // rejillaEtiquetas se guarda una vez, no por frame: la geometría de la
+  // rejilla (nº de columnas/filas) es la misma para todas las horas de un
+  // mismo dominio (BBOX_ESPANA es fija) — el cliente reconstruye lat/lon de
+  // cada punto a partir de esto + el bbox global, sin duplicar coordenadas
+  // en cada uno de los ~50 frames.
   await writeFile(manifiestoPath, JSON.stringify({
     parametro: nombreParam,
     unidad: rampa.unidad,
     ejecucion: meta.ejecucion,
     bbox: bboxGlobal,
     paradasColor: rampa.paradas,
+    rejillaEtiquetas: rejillaGlobal,
     frames: framesFinal,
   }, null, 2));
 
