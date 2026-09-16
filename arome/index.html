@@ -54,6 +54,14 @@
   #velocidad { background: transparent; color: var(--text-dim); border: 1px solid var(--panel-border); border-radius: 6px; font-size: 11px; padding: 2px 4px; flex: none; }
   .leaflet-control-attribution { font-size: 9px; }
   .leaflet-top.leaflet-right, .leaflet-top.leaflet-left { margin-top: 40px; }
+  /* Etiquetas numéricas de temperatura: halo negro sobre texto blanco para
+     leerse igual de bien sobre cualquier color de la rampa (frío o cálido). */
+  .etiqueta-valor {
+    font-size: 10.5px; font-weight: 700; color: #fff;
+    text-shadow: -1px -1px 2px #000, 1px -1px 2px #000, -1px 1px 2px #000, 1px 1px 2px #000, 0 0 3px #000;
+    text-align: center; white-space: nowrap; pointer-events: none;
+    font-variant-numeric: tabular-nums;
+  }
 </style>
 </head>
 <body>
@@ -114,6 +122,64 @@ async function main() {
   // Precarga de imágenes para que el scrubbing/reproducción no parpadee.
   manifiesto.frames.forEach(f => { const img = new Image(); img.src = DIR + f.archivo; });
 
+  // Etiquetas numéricas (solo temperatura, ver render-frames.js): la rejilla
+  // completa se genera bastante densa en el servidor (cada ~33km) y aquí se
+  // decide cuántos puntos de esa rejilla PINTAR según el zoom — más densidad
+  // al acercar, para no saturar el hueco pequeño donde vive este mapa
+  // embebido. Solo se reconstruye el conjunto de marcadores al cambiar de
+  // "nivel" de densidad (no en cada zoom incremental), y solo se actualiza
+  // el texto (no se recrean marcadores) al cambiar de hora — evita tirones
+  // durante la reproducción.
+  const capaEtiquetas = L.layerGroup().addTo(mapa);
+  let etiquetaMarkers = [];
+  let etiquetaStrideActual = null;
+
+  function strideParaZoom(zoom) {
+    if (zoom <= 6) return 4;
+    if (zoom <= 7) return 2;
+    return 1;
+  }
+
+  function construirEtiquetas() {
+    if (!manifiesto.rejillaEtiquetas) return;
+    const stride = strideParaZoom(mapa.getZoom());
+    if (stride === etiquetaStrideActual) return;
+    etiquetaStrideActual = stride;
+    capaEtiquetas.clearLayers();
+    etiquetaMarkers = [];
+    const { cols, filas } = manifiesto.rejillaEtiquetas;
+    for (let fy = 0; fy < filas; fy += stride) {
+      const lat = ymax - (fy / (filas - 1)) * (ymax - ymin);
+      for (let fx = 0; fx < cols; fx += stride) {
+        const lon = xmin + (fx / (cols - 1)) * (xmax - xmin);
+        const marker = L.marker([lat, lon], {
+          icon: L.divIcon({ className: "etiqueta-valor", html: "", iconSize: [28, 14], iconAnchor: [14, 7] }),
+          interactive: false, keyboard: false,
+        });
+        marker.addTo(capaEtiquetas);
+        etiquetaMarkers.push({ marker, idx: fy * cols + fx });
+      }
+    }
+    actualizarEtiquetas(indiceActualEtiquetas);
+  }
+
+  let indiceActualEtiquetas = 0;
+  function actualizarEtiquetas(i) {
+    indiceActualEtiquetas = i;
+    if (!manifiesto.rejillaEtiquetas) return;
+    const valores = manifiesto.frames[i].etiquetas;
+    if (!valores) return;
+    etiquetaMarkers.forEach(({ marker, idx }) => {
+      const el = marker.getElement();
+      if (!el) return;
+      const v = valores[idx];
+      el.textContent = v == null ? "" : v + "°";
+    });
+  }
+
+  mapa.on("zoomend", construirEtiquetas);
+  construirEtiquetas();
+
   const slider = document.getElementById("slider");
   const horaActual = document.getElementById("horaActual");
   const btnPlay = document.getElementById("btnPlay");
@@ -132,6 +198,7 @@ async function main() {
     horaActual.textContent = fmtHora.format(new Date(f.hora)) + " (hora local)";
     slider.value = i;
     overlay.setUrl(DIR + f.archivo);
+    actualizarEtiquetas(i);
   }
 
   cabecera.title = `Modelo AROME (Météo-France) · ejecución ${manifiesto.ejecucion.slice(0,16).replace("T"," ")}Z · pronóstico horario a ${manifiesto.frames.length - 1} h`;
