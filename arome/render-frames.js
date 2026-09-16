@@ -9,18 +9,20 @@ import { PNG } from "pngjs";
 
 // Rampa de temperatura (°C) tipo meteorológico: violeta/azul (frío) -> verde
 // -> amarillo -> naranja -> rojo/magenta (calor). Paradas y colores fijos,
-// interpolación lineal en RGB entre paradas contiguas.
+// interpolación lineal en RGB entre paradas contiguas. Opaca en todo el
+// rango (a:255) — a diferencia de precipitación/nubosidad, aquí no hay un
+// "valor cero = nada que pintar": todo punto del mapa tiene una temperatura.
 const PARADAS_TEMP = [
-  { t: -10, color: [97, 33, 168] },
-  { t: 0, color: [66, 98, 214] },
-  { t: 5, color: [56, 164, 214] },
-  { t: 10, color: [77, 201, 168] },
-  { t: 15, color: [130, 211, 90] },
-  { t: 20, color: [222, 219, 66] },
-  { t: 25, color: [237, 164, 56] },
-  { t: 30, color: [227, 96, 46] },
-  { t: 35, color: [186, 39, 60] },
-  { t: 40, color: [140, 20, 90] },
+  { t: -10, color: [97, 33, 168], a: 255 },
+  { t: 0, color: [66, 98, 214], a: 255 },
+  { t: 5, color: [56, 164, 214], a: 255 },
+  { t: 10, color: [77, 201, 168], a: 255 },
+  { t: 15, color: [130, 211, 90], a: 255 },
+  { t: 20, color: [222, 219, 66], a: 255 },
+  { t: 25, color: [237, 164, 56], a: 255 },
+  { t: 30, color: [227, 96, 46], a: 255 },
+  { t: 35, color: [186, 39, 60], a: 255 },
+  { t: 40, color: [140, 20, 90], a: 255 },
 ];
 
 // Precipitación acumulada en 1h (mm = kg/m²), estilo radar: transparente en
@@ -37,30 +39,48 @@ const PARADAS_PRECIP = [
   { t: 80, color: [170, 30, 140], a: 255 },
 ];
 
+// Nubosidad total (%): blanco translúcido creciendo en opacidad, estilo capa
+// de nubes de satélite — 0% invisible (cielo despejado), 100% casi opaco pero
+// sin llegar a 255 para que el mapa de fondo se intuya incluso con cielo cubierto.
+const PARADAS_NUBOSIDAD = [
+  { t: 0, color: [255, 255, 255], a: 0 },
+  { t: 20, color: [240, 244, 248], a: 35 },
+  { t: 50, color: [222, 228, 235], a: 110 },
+  { t: 80, color: [205, 212, 222], a: 175 },
+  { t: 100, color: [188, 196, 208], a: 225 },
+];
+
 const RAMPAS = {
   temperatura: { paradas: PARADAS_TEMP, unidad: "°C" },
   precipitacion: { paradas: PARADAS_PRECIP, unidad: "mm/h" },
+  nubosidad: { paradas: PARADAS_NUBOSIDAD, unidad: "%" },
 };
 
-// Interpolación lineal (color + alfa) entre las dos paradas contiguas al valor.
+// Interpolación lineal (color + alfa) entre las dos paradas contiguas al
+// valor. Alfa por defecto 255 (opaco) si una parada no lo especifica — sin
+// esto, "a" sale `undefined`, la interpolación da NaN, y PNG.data (Uint8Array)
+// convierte NaN en 0 en silencio: el frame se genera sin error pero
+// totalmente transparente. Bug real encontrado así con la rampa de
+// temperatura (nunca llevó "a" en sus paradas) antes de tener este resguardo.
 function colorEnRampa(v, paradas) {
-  if (v <= paradas[0].t) return [...paradas[0].color, paradas[0].a];
+  if (v <= paradas[0].t) return [...paradas[0].color, paradas[0].a ?? 255];
   const ultima = paradas[paradas.length - 1];
-  if (v >= ultima.t) return [...ultima.color, ultima.a];
+  if (v >= ultima.t) return [...ultima.color, ultima.a ?? 255];
   for (let i = 0; i < paradas.length - 1; i++) {
     const a = paradas[i];
     const b = paradas[i + 1];
     if (v >= a.t && v <= b.t) {
       const f = (v - a.t) / (b.t - a.t);
+      const alfaA = a.a ?? 255, alfaB = b.a ?? 255;
       return [
         Math.round(a.color[0] + (b.color[0] - a.color[0]) * f),
         Math.round(a.color[1] + (b.color[1] - a.color[1]) * f),
         Math.round(a.color[2] + (b.color[2] - a.color[2]) * f),
-        Math.round(a.a + (b.a - a.a) * f),
+        Math.round(alfaA + (alfaB - alfaA) * f),
       ];
     }
   }
-  return [...ultima.color, ultima.a];
+  return [...ultima.color, ultima.a ?? 255];
 }
 
 // Factor de diezmado (nearest-neighbor): la resolución nativa (0.01°, ~1.1 km)

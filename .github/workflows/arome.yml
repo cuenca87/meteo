@@ -32,13 +32,13 @@ jobs:
         working-directory: arome
         run: npm install geotiff pngjs
 
-      # continue-on-error en los dos pasos de datos: un fallo transitorio de
-      # la API de Météo-France en UNO de los dos parámetros (visto en vivo:
-      # GetCapabilities devolvió el listado sin el viento un rato, se
+      # continue-on-error en los pasos de datos: un fallo transitorio de la
+      # API de Météo-France en UNO de los parámetros (visto en vivo:
+      # GetCapabilities devolvió el listado sin un parámetro un rato, se
       # recuperó sola en el siguiente ciclo) no debe impedir publicar lo que
-      # sí se consiguió del otro — antes, si viento fallaba, el job entero
-      # abortaba y el paso "Publicar cambios" ni se ejecutaba, perdiendo
-      # también los cambios de precipitación de esa pasada.
+      # sí se consiguió del resto — si un paso fallara sin continue-on-error,
+      # el job entero abortaría y el paso "Publicar cambios" ni se
+      # ejecutaría, perdiendo también los cambios ya conseguidos de esa pasada.
       - name: Descargar y renderizar precipitación
         id: precipitacion
         continue-on-error: true
@@ -51,31 +51,43 @@ jobs:
           node render-frames.js precipitacion
           rm -rf data/frames_precipitacion
 
-      - name: Descargar y renderizar viento
-        id: viento
+      - name: Descargar y renderizar temperatura
+        id: temperatura
         continue-on-error: true
         working-directory: arome
         env:
           METEOFRANCE_BASIC_AUTH: ${{ secrets.METEOFRANCE_BASIC_AUTH }}
         run: |
-          rm -rf data/frames_viento
-          node fetch-viento.js
-          node render-viento.js
-          rm -rf data/frames_viento
+          rm -rf data/frames_temperatura
+          node fetch-arome.js temperatura
+          node render-frames.js temperatura
+          rm -rf data/frames_temperatura
+
+      - name: Descargar y renderizar nubosidad
+        id: nubosidad
+        continue-on-error: true
+        working-directory: arome
+        env:
+          METEOFRANCE_BASIC_AUTH: ${{ secrets.METEOFRANCE_BASIC_AUTH }}
+        run: |
+          rm -rf data/frames_nubosidad
+          node fetch-arome.js nubosidad
+          node render-frames.js nubosidad
+          rm -rf data/frames_nubosidad
 
       - name: Publicar cambios
         if: always()
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add arome/data/png_precipitacion arome/data/viento
-          git diff --cached --quiet || git commit -m "Actualiza animación AROME (precipitación + viento)"
+          git add arome/data/png_precipitacion arome/data/png_temperatura arome/data/png_nubosidad
+          git diff --cached --quiet || git commit -m "Actualiza animación AROME (precipitación + temperatura + nubosidad)"
           git push
 
-      # Si alguno de los dos pasos anteriores falló de verdad (no solo un
-      # hueco de horas pendiente, eso no es fallo), marcar el job en rojo
+      # Si alguno de los pasos anteriores falló de verdad (no solo un hueco
+      # de horas pendiente, eso no es fallo), marcar el job en rojo
       # igualmente para que salte el aviso por correo — continue-on-error
       # solo evita que bloquee el commit, no debe ocultar el fallo.
       - name: Marcar el job como fallido si algún paso de datos falló
-        if: steps.precipitacion.outcome == 'failure' || steps.viento.outcome == 'failure'
+        if: steps.precipitacion.outcome == 'failure' || steps.temperatura.outcome == 'failure' || steps.nubosidad.outcome == 'failure'
         run: exit 1
