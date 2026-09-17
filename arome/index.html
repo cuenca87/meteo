@@ -167,12 +167,17 @@ async function main() {
   function actualizarEtiquetas(i) {
     indiceActualEtiquetas = i;
     if (!manifiesto.rejillaEtiquetas) return;
+    // Si este frame concreto no trae "etiquetas" (p.ej. mezcla de horas
+    // regeneradas y horas antiguas heredadas de una ejecución previa a este
+    // cambio), se vacía el texto en vez de dejar el valor de la hora
+    // anterior — bug real reportado por el usuario: sin este `else`, los
+    // números parecían "congelados" en el primer valor visto, porque un
+    // frame sin datos simplemente no tocaba el texto ya puesto.
     const valores = manifiesto.frames[i].etiquetas;
-    if (!valores) return;
     etiquetaMarkers.forEach(({ marker, idx }) => {
       const el = marker.getElement();
       if (!el) return;
-      const v = valores[idx];
+      const v = valores ? valores[idx] : null;
       el.textContent = v == null ? "" : v + "°";
     });
   }
