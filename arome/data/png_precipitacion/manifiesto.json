@@ -1,7 +1,7 @@
 {
   "parametro": "precipitacion",
   "unidad": "mm/h",
-  "ejecucion": "2026-09-17T12.00.00Z",
+  "ejecucion": "2026-09-17T15.00.00Z",
   "bbox": [
     -9.899999999999999,
     37.49,
@@ -85,16 +85,16 @@
   "rejillaEtiquetas": null,
   "frames": [
     {
-      "hora": "2026-09-17T13:00:00Z",
-      "archivo": "2026-09-17T13-00-00Z.png",
+      "hora": "2026-09-17T16:00:00Z",
+      "archivo": "2026-09-17T16-00-00Z.png",
       "min": 0,
-      "max": 57.8
+      "max": 38.2
     },
     {
-      "hora": "2026-09-17T18:00:00Z",
-      "archivo": "2026-09-17T18-00-00Z.png",
+      "hora": "2026-09-17T17:00:00Z",
+      "archivo": "2026-09-17T17-00-00Z.png",
       "min": 0,
-      "max": 32.3
+      "max": 26.3
     },
     {
       "hora": "2026-09-17T19:00:00Z",
