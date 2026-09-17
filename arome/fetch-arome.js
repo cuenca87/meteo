@@ -27,8 +27,18 @@ const BBOX_ESPANA = [-9.9, 37.5, 4.4, 43.9];
 // Dominio anterior (cornisa cantábrica), se deja por si se necesita un recorte más fino.
 const BBOX_CANTABRICO = [-9.3, 41.8, -1.6, 44.3];
 
+// conEtiquetas: igual que en render-frames.js — si la hora ya está en el
+// manifiesto pero SIN el array "etiquetas" (p.ej. porque se generó con una
+// versión anterior de render-frames.js, antes de añadir esa rejilla), no
+// cuenta como "ya renderizada": se vuelve a pedir. Bug real encontrado en
+// producción (2026-09-17): sin esto, las horas ya presentes al desplegar la
+// función de etiquetas se quedaban para siempre sin ellas — como la
+// animación siempre empieza por las horas más próximas (las primeras en
+// entrar al manifiesto, luego las primeras en "darse por hechas"), el
+// usuario veía los números clavados en el primer valor real que sí llegó a
+// cargar, en vez de ir cambiando con cada hora.
 const PARAMETROS = {
-  temperatura: { coverage: "TEMPERATURE__SPECIFIC_HEIGHT_LEVEL_ABOVE_GROUND", altura: 2, bbox: BBOX_ESPANA },
+  temperatura: { coverage: "TEMPERATURE__SPECIFIC_HEIGHT_LEVEL_ABOVE_GROUND", altura: 2, bbox: BBOX_ESPANA, conEtiquetas: true },
   precipitacion: { coverage: "TOTAL_PRECIPITATION__GROUND_OR_WATER_SURFACE", sufijo: "_PT1H", bbox: BBOX_ESPANA },
   // Nubosidad total (%), instantánea (sin sufijo de acumulación) y sin
   // dimensión "height" (es GROUND_OR_WATER_SURFACE, no
@@ -47,12 +57,14 @@ function listaHorasEntre(inicioISO, finISO) {
   return horas;
 }
 
-async function horasYaRenderizadas(nombreParam) {
+async function horasYaRenderizadas(nombreParam, conEtiquetas) {
   const manifiestoPath = `data/png_${nombreParam}/manifiesto.json`;
   if (!existsSync(manifiestoPath)) return new Set();
   try {
     const manifiesto = JSON.parse(await readFile(manifiestoPath, "utf8"));
-    return new Set((manifiesto.frames || []).map((f) => f.hora));
+    const frames = manifiesto.frames || [];
+    const completos = conEtiquetas ? frames.filter((f) => f.etiquetas) : frames;
+    return new Set(completos.map((f) => f.hora));
   } catch {
     return new Set();
   }
@@ -80,7 +92,7 @@ async function main() {
   console.log(`Rango de pronóstico: ${inicio} .. ${fin}`);
 
   const horas = listaHorasEntre(inicio, fin);
-  const yaRenderizadas = await horasYaRenderizadas(nombreParam);
+  const yaRenderizadas = await horasYaRenderizadas(nombreParam, param.conEtiquetas);
   const horasPendientes = horas.filter((h) => !yaRenderizadas.has(h));
   console.log(`${horas.length} horas en el rango de pronóstico, ${yaRenderizadas.size} ya renderizadas de una pasada anterior, ${horasPendientes.length} pendientes de descargar`);
 
