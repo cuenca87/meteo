@@ -1,7 +1,7 @@
 {
   "parametro": "nubosidad",
   "unidad": "%",
-  "ejecucion": "2026-09-21T09.00.00Z",
+  "ejecucion": "2026-09-21T12.00.00Z",
   "bbox": [
     -9.899999999999999,
     37.49,
@@ -58,14 +58,8 @@
   "rejillaEtiquetas": null,
   "frames": [
     {
-      "hora": "2026-09-21T14:00:00Z",
-      "archivo": "2026-09-21T14-00-00Z.png",
-      "min": 0,
-      "max": 100
-    },
-    {
-      "hora": "2026-09-21T15:00:00Z",
-      "archivo": "2026-09-21T15-00-00Z.png",
+      "hora": "2026-09-21T13:00:00Z",
+      "archivo": "2026-09-21T13-00-00Z.png",
       "min": 0,
       "max": 100
     },
