@@ -1,7 +1,7 @@
 {
   "parametro": "precipitacion",
   "unidad": "mm/h",
-  "ejecucion": "2026-09-21T21.00.00Z",
+  "ejecucion": "2026-09-22T00.00.00Z",
   "bbox": [
     -9.899999999999999,
     37.49,
@@ -84,12 +84,6 @@
   ],
   "rejillaEtiquetas": null,
   "frames": [
-    {
-      "hora": "2026-09-22T01:00:00Z",
-      "archivo": "2026-09-22T01-00-00Z.png",
-      "min": 0,
-      "max": 0
-    },
     {
       "hora": "2026-09-22T02:00:00Z",
       "archivo": "2026-09-22T02-00-00Z.png",
