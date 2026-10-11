@@ -186,12 +186,14 @@ let ports=null,M=null,ML=null,HD=null,aemetStations=null,aemetCandidates=null,ae
 const MESES=["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
 
 function initMap(){if(M)return;M=L.map("map").setView([39.5,-3],6);
-const voyager=L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",{attribution:'&copy; <a href="https://carto.com">CARTO</a>',maxZoom:19});
-const positron=L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",{attribution:'&copy; <a href="https://carto.com">CARTO</a>',maxZoom:19});
-const dark=L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",{attribution:'&copy; <a href="https://carto.com">CARTO</a>',maxZoom:19});
+// Mapas de fondo sin clave de API (los de CARTO pasaron a exigirla y devolvían teselas con "API KEY REQUIRED").
+const osm=L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",{attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',maxZoom:19});
+const ign=L.tileLayer("https://www.ign.es/wmts/ign-base?layer=IGNBaseTodo&style=default&tilematrixset=GoogleMapsCompatible&Service=WMTS&Request=GetTile&Version=1.0.0&format=image/jpeg&TileMatrix={z}&TileRow={y}&TileCol={x}",{attribution:"IGN-Base &copy; IGN",maxZoom:19});
+const claro=L.tileLayer("https://services.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}",{attribution:"Esri, HERE, Garmin",maxZoom:16});
+const dark=L.tileLayer("https://services.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}",{attribution:"Esri, HERE, Garmin",maxZoom:16});
 const pnoa=L.tileLayer("https://www.ign.es/wmts/pnoa-ma?layer=OI.OrthoimageCoverage&style=default&tilematrixset=GoogleMapsCompatible&Service=WMTS&Request=GetTile&Version=1.0.0&format=image/jpeg&TileMatrix={z}&TileRow={y}&TileCol={x}",{attribution:"PNOA &copy; IGN",maxZoom:19});
-voyager.addTo(M);
-L.control.layers({"Voyager":voyager,"Positron":positron,"Oscuro":dark,"Satélite":pnoa},{},{collapsed:true}).addTo(M);
+osm.addTo(M);
+L.control.layers({"Mapa":osm,"IGN":ign,"Claro":claro,"Oscuro":dark,"Satélite":pnoa},{},{collapsed:true}).addTo(M);
 ML=L.layerGroup().addTo(M)}
 function showMap(v){document.getElementById("mapc").style.display=v?"block":"none";if(M&&v)setTimeout(()=>M.invalidateSize(),100)}
 
