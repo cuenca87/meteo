@@ -192,8 +192,8 @@ const ign=L.tileLayer("https://www.ign.es/wmts/ign-base?layer=IGNBaseTodo&style=
 const claro=L.tileLayer("https://services.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}",{attribution:"Esri, HERE, Garmin",maxZoom:16});
 const dark=L.tileLayer("https://services.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}",{attribution:"Esri, HERE, Garmin",maxZoom:16});
 const pnoa=L.tileLayer("https://www.ign.es/wmts/pnoa-ma?layer=OI.OrthoimageCoverage&style=default&tilematrixset=GoogleMapsCompatible&Service=WMTS&Request=GetTile&Version=1.0.0&format=image/jpeg&TileMatrix={z}&TileRow={y}&TileCol={x}",{attribution:"PNOA &copy; IGN",maxZoom:19});
-osm.addTo(M);
-L.control.layers({"Mapa":osm,"IGN":ign,"Claro":claro,"Oscuro":dark,"Satélite":pnoa},{},{collapsed:true}).addTo(M);
+pnoa.addTo(M);
+L.control.layers({"Satélite":pnoa,"Mapa":osm,"IGN":ign,"Claro":claro,"Oscuro":dark},{},{collapsed:true}).addTo(M);
 ML=L.layerGroup().addTo(M)}
 function showMap(v){document.getElementById("mapc").style.display=v?"block":"none";if(M&&v)setTimeout(()=>M.invalidateSize(),100)}
 
