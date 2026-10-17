@@ -58,7 +58,9 @@ const PARADAS_NUBOSIDAD = [
 // se haya pedido).
 const RAMPAS = {
   temperatura: { paradas: PARADAS_TEMP, unidad: "°C", conEtiquetas: true },
-  precipitacion: { paradas: PARADAS_PRECIP, unidad: "mm/h" },
+  // conValores: además de la imagen, un PNG con el valor de cada celda (para
+  // que el visor de ríos calcule la lluvia prevista en una cuenca).
+  precipitacion: { paradas: PARADAS_PRECIP, unidad: "mm/h", conValores: true },
   nubosidad: { paradas: PARADAS_NUBOSIDAD, unidad: "%" },
 };
 
@@ -119,7 +121,40 @@ function extraerRejillaEtiquetas(raster, widthOrig, heightOrig, pasoPx) {
   return { cols, filas, valores };
 }
 
-async function tiffAPng(rutaTiff, paradas, conEtiquetas) {
+// PNG de valores: centésimas de mm en 16 bits (R = byte alto, G = byte bajo,
+// B = 0, A = 255 para que el navegador no toque los colores al leerlo con un
+// canvas). Cada celda es la media de un bloque de DIEZMADO×DIEZMADO celdas
+// nativas (la media conserva el agua caída, el vecino más próximo no).
+// VALOR_SIN = fuera del dominio de AROME.
+const VALOR_SIN = 65535;
+function pngValores(raster, widthOrig, heightOrig, width, height) {
+  const png = new PNG({ width, height });
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      let suma = 0, n = 0;
+      for (let dy = 0; dy < DIEZMADO; dy++) {
+        const ys = y * DIEZMADO + dy;
+        if (ys >= heightOrig) continue;
+        for (let dx = 0; dx < DIEZMADO; dx++) {
+          const xs = x * DIEZMADO + dx;
+          if (xs >= widthOrig) continue;
+          const v = raster[ys * widthOrig + xs];
+          if (v === 9999 || !Number.isFinite(v)) continue;
+          suma += Math.max(0, v); n++;
+        }
+      }
+      const c = n ? Math.min(VALOR_SIN - 1, Math.round(suma / n * 100)) : VALOR_SIN;
+      const idx = (y * width + x) * 4;
+      png.data[idx] = c >> 8;
+      png.data[idx + 1] = c & 255;
+      png.data[idx + 2] = 0;
+      png.data[idx + 3] = 255;
+    }
+  }
+  return png;
+}
+
+async function tiffAPng(rutaTiff, paradas, conEtiquetas, conValores) {
   const buf = await readFile(rutaTiff);
   const tiff = await fromArrayBuffer(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength));
   const image = await tiff.getImage();
@@ -161,7 +196,13 @@ async function tiffAPng(rutaTiff, paradas, conEtiquetas) {
 
   const rejilla = conEtiquetas ? extraerRejillaEtiquetas(raster, widthOrig, heightOrig, PASO_ETIQUETAS_PX) : null;
 
-  return { png, width, height, bbox, min, max, rejilla };
+  const valores = conValores ? pngValores(raster, widthOrig, heightOrig, width, height) : null;
+  // Rejilla de los valores: celdas de DIEZMADO píxeles nativos desde la esquina
+  // noroeste (la última fila/columna puede quedar parcial)
+  const rx = (bbox[2] - bbox[0]) / widthOrig, ry = (bbox[3] - bbox[1]) / heightOrig;
+  const rejillaValores = conValores ? { W: width, H: height, x0: bbox[0], y0: bbox[3], dx: rx * DIEZMADO, dy: ry * DIEZMADO, escala: 100, sin: VALOR_SIN } : null;
+
+  return { png, width, height, bbox, min, max, rejilla, valores, rejillaValores };
 }
 
 async function main() {
@@ -187,16 +228,19 @@ async function main() {
   let framesPrevios = [];
   let bboxPrevio = null;
   let rejillaPrevia = null;
+  let rejValPrevia = null;
   if (existsSync(manifiestoPath)) {
     const previo = JSON.parse(await readFile(manifiestoPath, "utf8"));
     bboxPrevio = previo.bbox ?? null;
     rejillaPrevia = previo.rejillaEtiquetas ?? null;
+    rejValPrevia = previo.rejillaValores ?? null;
     const ahora = Date.now();
     for (const f of previo.frames || []) {
       if (new Date(f.hora).getTime() >= ahora) {
         framesPrevios.push(f);
       } else {
         await unlink(`${dirSalida}/${f.archivo}`).catch(() => {});
+        if (f.valores) await unlink(`${dirSalida}/${f.valores}`).catch(() => {});
       }
     }
   }
@@ -204,14 +248,20 @@ async function main() {
   const frames = [...framesPrevios];
   let bboxGlobal = bboxPrevio;
   let rejillaGlobal = rejillaPrevia;
+  let rejValGlobal = rejValPrevia;
   for (const fichero of ficheros) {
     const horaISO = fichero.replace(/\.tiff$/, "").replace(/(\d{2})-(\d{2})-(\d{2})Z$/, "$1:$2:$3Z");
-    const { png, width, height, bbox, min, max, rejilla } = await tiffAPng(`${dirEntrada}/${fichero}`, rampa.paradas, rampa.conEtiquetas);
+    const { png, width, height, bbox, min, max, rejilla, valores, rejillaValores } = await tiffAPng(`${dirEntrada}/${fichero}`, rampa.paradas, rampa.conEtiquetas, rampa.conValores);
     bboxGlobal = bbox;
     const nombrePng = fichero.replace(/\.tiff$/, ".png");
     const bufferPng = PNG.sync.write(png);
     await writeFile(`${dirSalida}/${nombrePng}`, bufferPng);
-    const frame = { hora: horaISO, archivo: nombrePng, min: Number(min.toFixed(1)), max: Number(max.toFixed(1)) };
+    const frame = { hora: horaISO, archivo: nombrePng, min: Number(min.toFixed(1)), max: Number(max.toFixed(1)), ejecucion: meta.ejecucion };
+    if (valores) {
+      frame.valores = nombrePng.replace(/\.png$/, ".v.png");
+      await writeFile(`${dirSalida}/${frame.valores}`, PNG.sync.write(valores));
+      rejValGlobal = rejillaValores;
+    }
     if (rejilla) {
       rejillaGlobal = { cols: rejilla.cols, filas: rejilla.filas };
       frame.etiquetas = rejilla.valores;
@@ -239,6 +289,7 @@ async function main() {
     bbox: bboxGlobal,
     paradasColor: rampa.paradas,
     rejillaEtiquetas: rejillaGlobal,
+    rejillaValores: rejValGlobal,
     frames: framesFinal,
   }, null, 2));
 
