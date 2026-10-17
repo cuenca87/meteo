@@ -39,7 +39,11 @@ const BBOX_CANTABRICO = [-9.3, 41.8, -1.6, 44.3];
 // cargar, en vez de ir cambiando con cada hora.
 const PARAMETROS = {
   temperatura: { coverage: "TEMPERATURE__SPECIFIC_HEIGHT_LEVEL_ABOVE_GROUND", altura: 2, bbox: BBOX_ESPANA, conEtiquetas: true },
-  precipitacion: { coverage: "TOTAL_PRECIPITATION__GROUND_OR_WATER_SURFACE", sufijo: "_PT1H", bbox: BBOX_ESPANA },
+  // conValores: cada hora lleva además un PNG de valores (render-frames.js)
+  // que usa el visor de ríos. Como es una previsión para cuencas, las horas
+  // se renuevan con cada ejecución nueva del modelo (porEjecucion): solo
+  // cuentan como hechas las de la ejecución actual.
+  precipitacion: { coverage: "TOTAL_PRECIPITATION__GROUND_OR_WATER_SURFACE", sufijo: "_PT1H", bbox: BBOX_ESPANA, conValores: true, porEjecucion: true },
   // Nubosidad total (%), instantánea (sin sufijo de acumulación) y sin
   // dimensión "height" (es GROUND_OR_WATER_SURFACE, no
   // SPECIFIC_HEIGHT_LEVEL_ABOVE_GROUND) — verificado en vivo, valores 0-100.
@@ -57,13 +61,14 @@ function listaHorasEntre(inicioISO, finISO) {
   return horas;
 }
 
-async function horasYaRenderizadas(nombreParam, conEtiquetas) {
+async function horasYaRenderizadas(nombreParam, { conEtiquetas, conValores, porEjecucion }, ejecucion) {
   const manifiestoPath = `data/png_${nombreParam}/manifiesto.json`;
   if (!existsSync(manifiestoPath)) return new Set();
   try {
     const manifiesto = JSON.parse(await readFile(manifiestoPath, "utf8"));
     const frames = manifiesto.frames || [];
-    const completos = conEtiquetas ? frames.filter((f) => f.etiquetas) : frames;
+    const completos = frames.filter((f) => (!conEtiquetas || f.etiquetas) && (!conValores || f.valores)
+      && (!porEjecucion || f.ejecucion === ejecucion));
     return new Set(completos.map((f) => f.hora));
   } catch {
     return new Set();
@@ -92,7 +97,7 @@ async function main() {
   console.log(`Rango de pronóstico: ${inicio} .. ${fin}`);
 
   const horas = listaHorasEntre(inicio, fin);
-  const yaRenderizadas = await horasYaRenderizadas(nombreParam, param.conEtiquetas);
+  const yaRenderizadas = await horasYaRenderizadas(nombreParam, param, ejecucion);
   const horasPendientes = horas.filter((h) => !yaRenderizadas.has(h));
   console.log(`${horas.length} horas en el rango de pronóstico, ${yaRenderizadas.size} ya renderizadas de una pasada anterior, ${horasPendientes.length} pendientes de descargar`);
 
