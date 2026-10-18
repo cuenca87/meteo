@@ -1,0 +1,48 @@
+name: Actualizar prevision ICON-EU
+
+# Los datos NO se guardan en main: van a la rama "datos-icon", que se sobrescribe en
+# cada ejecucion (un solo commit, sin historial que crezca). El visor de rios los lee
+# de https://raw.githubusercontent.com/cuenca87/meteo/datos-icon/manifiesto.json
+
+on:
+  schedule:
+    # Las ejecuciones de 120 h (00/06/12/18 UTC) terminan de publicarse ~3h40 despues.
+    # Segunda pasada una hora mas tarde por si se retrasa (el script no hace nada si la
+    # ejecucion ya esta publicada).
+    - cron: "50 3,9,15,21 * * *"
+    - cron: "50 4,10,16,22 * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  actualizar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Instalar dependencias
+        run: pip install eccodes numpy pillow
+
+      - name: Descargar y preparar la precipitacion
+        working-directory: icon
+        env:
+          PUBLICADO: https://raw.githubusercontent.com/${{ github.repository }}/datos-icon/manifiesto.json
+        run: python icon_precipitacion.py
+
+      - name: Publicar en la rama datos-icon
+        working-directory: icon
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          [ -d data ] || { echo "Nada nuevo"; exit 0; }
+          cd data
+          git init -q -b datos-icon
+          git -c user.name="github-actions[bot]" -c user.email="github-actions[bot]@users.noreply.github.com" add -A
+          git -c user.name="github-actions[bot]" -c user.email="github-actions[bot]@users.noreply.github.com" commit -qm "Prevision ICON-EU $(jq -r .ejecucion manifiesto.json)"
+          git push -f -q "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git" datos-icon
