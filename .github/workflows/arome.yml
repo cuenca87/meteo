@@ -32,6 +32,18 @@ jobs:
         working-directory: arome
         run: npm install geotiff pngjs
 
+      # Los datos no se guardan en main: viven en la rama "datos-arome", que se
+      # sobrescribe en cada pasada (un solo commit, sin historial que crezca; antes
+      # el repo llego a ~700 MB). Se recuperan aqui para que fetch-arome.js y
+      # render-frames.js sigan siendo incrementales.
+      - name: Recuperar los datos publicados
+        run: |
+          # Si esto falla, el job se para: publicar sin los datos previos los borraria
+          mkdir -p arome/data
+          git fetch -q --depth 1 origin datos-arome
+          git --work-tree=arome/data checkout FETCH_HEAD -- .
+          git reset -q
+
       # continue-on-error en los pasos de datos: un fallo transitorio de la
       # API de Météo-France en UNO de los parámetros (visto en vivo:
       # GetCapabilities devolvió el listado sin un parámetro un rato, se
@@ -77,12 +89,17 @@ jobs:
 
       - name: Publicar cambios
         if: always()
+        working-directory: arome/data
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          rm -rf frames_*
+          git init -q -b datos-arome
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add arome/data/png_precipitacion arome/data/png_temperatura arome/data/png_nubosidad
-          git diff --cached --quiet || git commit -m "Actualiza animación AROME (precipitación + temperatura + nubosidad)"
-          git push
+          git add -A
+          git commit -qm "Datos AROME (precipitación + temperatura + nubosidad)"
+          git push -f -q "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git" datos-arome
 
       # Si alguno de los pasos anteriores falló de verdad (no solo un hueco
       # de horas pendiente, eso no es fallo), marcar el job en rojo
